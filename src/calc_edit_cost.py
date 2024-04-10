@@ -3,6 +3,20 @@ import networkx as nx
 from typing import List
 
 class EditCost:
+    """
+    Compute the cost of edit operations implied by the node assignment.
+
+    Attributes
+    ----------
+    node_mapping : List
+    g1_n : nx.Graph (source graph)
+    g2_n : nx.Graph (target graph)
+
+    Methods
+    -------
+    compute_cost_node_edit()
+    compute_cost_edge_edit()
+    """
 
     def __init__(self,
                  node_mapping: List,
