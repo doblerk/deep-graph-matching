@@ -1,7 +1,15 @@
 # Environments
 venv/
 
-# Src files
+# Data
+data/TUDataset/AIDS/processed/
+data/TUDataset/DD/processed/
+data/TUDataset/ENZYMES/processed/
+data/TUDataset/MUTAG/processed/
+data/TUDataset/NCI1/processed/
+data/TUDataset/OHSU/processed/
+ 
+# Src
 src/cluster_gin.py
 src/graphs_dissimilarity.py
 src/node_mapping_assignment.py
