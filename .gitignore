@@ -1,0 +1,14 @@
+# Environments
+venv/
+
+# Src files
+src/cluster_gin.py
+src/graphs_dissimilarity.py
+src/node_mapping_assignment.py
+src/quick_testing.py
+src/to_delete.py
+src/train_gcn.py
+src/utils.py
+
+# Personal
+res/
