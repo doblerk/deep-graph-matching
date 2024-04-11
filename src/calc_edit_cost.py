@@ -2,6 +2,7 @@ import numpy as np
 import networkx as nx
 from typing import List
 
+
 class EditCost:
     """
     Compute the cost of edit operations implied by the node assignment.
@@ -31,7 +32,7 @@ class EditCost:
         self.g2_mapped_nodes = sorted([x[1] for x in self.node_mapping])
         self.g2_unmapped_nodes = np.setdiff1d(self.g2_nodes, self.g2_mapped_nodes)
 
-    def compute_cost_node_edit(self):
+    def compute_cost_node_edit(self) -> int:
         cost = 0
         source_attrs = list(nx.get_node_attributes(self.g1_nx, name='x').values())
         target_attrs = list(nx.get_node_attributes(self.g2_nx, name='x').values())
@@ -39,7 +40,7 @@ class EditCost:
         cost += len(self.g2_unmapped_nodes)
         return cost
 
-    def compute_cost_edge_edit(self):
+    def compute_cost_edge_edit(self) -> int:
         cost = 0
         n = self.g1_nx.number_of_nodes()
         for i in range(n):

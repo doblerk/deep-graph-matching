@@ -11,7 +11,6 @@ from calc_embedding_distances import NodeMapping
 from calc_edit_cost import EditCost
 
 
-
 def get_args_parser():
     parser = argparse.ArgumentParser(fromfile_prefix_chars='@')
     parser.add_argument('--dataset_dir', type=str, help='Path to dataset')
@@ -21,6 +20,12 @@ def get_args_parser():
 
 
 def main(args):
+    """
+    Computes all pairwise distances between every pair of graphs to yield a dissimalirty matrix.
+
+    Args:
+        args: command-line arguments (path to dataset directory, dataset name, and path to output directory).
+    """
 
     dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
     dataset_nx = [to_networkx(dataset[i], node_attrs='x', to_undirected=True) for i in range(len(dataset))]
