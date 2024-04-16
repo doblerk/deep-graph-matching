@@ -3,20 +3,24 @@ import torch
 import torch.nn.functional as F
 
 from torch.nn import Linear, BatchNorm1d, ReLU, Sequential
-from torch_geometric.nn import GCNConv, GINConv, global_add_pool, global_mean_pool
+from torch_geometric.nn import GCNConv, GINConv, SAGEConv, GATv2Conv, global_add_pool, global_mean_pool
 
 
 class GCN(torch.nn.Module):
-    '''
+    """
     A class defining the Graph Convolutional Network
 
-    Args:
-        n_features: number of features per node
-        n_channels: number of channels
-        n_classes: number of classes
-    '''
+    Attributes
+    ----------
+    n_features: int
+        number of features per node
+    n_channels: int
+        number of channels
+    n_classes: int
+        number of classes
+    """
     def __init__(self, n_features, n_channels, n_classes):
-        super(GCN, self).__init__()
+        super().__init__()
         
         torch.manual_seed(4038)
         
@@ -63,19 +67,19 @@ class GCN(torch.nn.Module):
         return h1, h2, h3, h4, z
 
 
-
-
-
 class GINLayer(torch.nn.Module):
-    '''
+    """
     A class defining the Graph Isomorphism layer
 
-    Args:
-        input_dim: number of features per node
-        hidden_dim: number of channels
-    '''
+    Attributes
+    ----------
+    input_dim: int
+        number of features per node
+    hidden_dim: int
+        number of channels
+    """
     def __init__(self, input_dim, hidden_dim) -> None:
-        super(GINLayer, self).__init__()
+        super().__init__()
         
         self.conv = GINConv(
             Sequential(
@@ -93,16 +97,20 @@ class GINLayer(torch.nn.Module):
 
 
 class GINModel(torch.nn.Module):
-    '''
+    """
     A class defining the Graph Isomorphism Network
 
-    Args:
-        input_dim: number of features per node
-        hidden_dim: number of channels
-        n_classes: number of classes
-    '''
+    Attributes
+    ----------
+    input_dim: int
+        number of features per node
+    hidden_dim: int
+        number of channels
+    n_classes: int
+        number of classes
+    """
     def __init__(self, input_dim, hidden_dim, n_classes, n_layers):
-        super(GINModel, self).__init__()
+        super().__init__()
 
         torch.manual_seed(4030)
 
@@ -137,15 +145,18 @@ class GINModel(torch.nn.Module):
 
 
 class GCNBlock(torch.nn.Module):
-    '''
+    """
     A class defining the Graph Convolutional Network using concatenated skip connections
 
-    Args:
-        n_features: number of features per node
-        n_channels: number of channels
-    '''
+    Attributes
+    ----------
+    n_features: int
+        number of features per node
+    n_channels: int
+        number of channels
+    """
     def __init__(self, n_features, n_channels):
-        super(GCNBlock, self).__init__()
+        super().__init__()
         self._block = Sequential(
             'x, edge_index, batch', [
                 (BatchNorm1d(n_channels), 'x, edge_index -> x'),
@@ -162,17 +173,22 @@ class GCNBlock(torch.nn.Module):
 
 
 class GCNBlockStack(torch.nn.Module):
-    '''
+    """
     A class defining the stack of multiple GCN blocks
 
-    Args:
-        n_features: number of features per node
-        n_channels: number of channels
-        n_classes: number of classes
-        n_layers: number of layers
-    '''
+    Attributes
+    ----------
+    n_features: int
+        number of features per node
+    n_channels: int
+        number of channels
+    n_classes: int
+        number of classes
+    n_layers: int
+        number of layers
+    """
     def __init__(self, n_features, n_channels, n_classes, n_layers):
-        super(GCNBlockStack, self).__init__()
+        super().__init__()
         self._n_layers = n_layers
 
         self._layers = []
@@ -231,9 +247,9 @@ class GCNBlockStack(torch.nn.Module):
 
 
 class GNNConcatSkipConnections(torch.nn.Module):
-    '''
+    """
     TODO
-    '''
+    """
     def __init__(self):
         super(GNNConcatSkipConnections, self).__init__()
 
@@ -258,3 +274,132 @@ class GNNConcatSkipConnections(torch.nn.Module):
     def forward(self, x, edge_index, batch):
         out = self._model(x, edge_index, batch)
         return out
+
+
+class GraphSAGELayer(torch.nn.Module):
+    """
+    A class defining the GraphSAGE layer
+
+    Attributes
+    ----------
+    input_dim: int
+        number of features per node
+    hidden_dim: int
+        number of channels
+    """
+    def __init__(self, input_dim, hidden_dim, aggr='mean') -> None:
+        super().__init__()
+        
+        self.conv = SAGEConv(input_dim, hidden_dim, aggr=aggr)
+    
+    def forward(self, x, edge_index):
+        return self.conv(x, edge_index)
+
+
+class GraphSAGE(torch.nn.Module):
+    """
+    A class defining the GraphSAGE Network
+
+    Attributes
+    ----------
+    input_dim: int
+        number of features per node
+    hidden_dim: int
+        number of channels
+    n_classes: int
+        number of classes
+    """
+    def __init__(self, input_dim, hidden_dim, n_classes, n_layers) -> None:
+        super().__init__()
+        
+        self.layers = torch.nn.ModuleList([GraphSAGELayer(input_dim, hidden_dim) for _ in range(n_layers)])
+
+        self.linear1 = Linear(hidden_dim, hidden_dim)
+        self.linear2 = Linear(hidden_dim, n_classes)
+    
+    def forward(self, x, edge_index):
+
+        # Node embeddings
+        node_embeddings = []
+        for layer in self.layers:
+            h = layer(x, edge_index)
+            # should I add this after each layer or all layers except the last one? If so, add if statement.
+            h = h.relu()
+            h = F.dropout(h, p=0.2, training=self.training)
+            node_embeddings.append(h)
+        
+        # Graph-level readout
+        x = global_mean_pool(node_embeddings[-1])
+
+        # Classify
+        z = self.linear1(x)
+        z = z.relu()
+        z = F.dropout(z, p=0.2, training=self.training)
+        z = self.linear2(z)
+        z = F.log_softmax(z, dim=1)
+
+        return z
+
+
+class GATLayer(torch.nn.Module):
+    """
+    A class defining the Graph Attention layer
+
+    Attributes
+    ----------
+    input_dim: int
+        number of features per node
+    hidden_dim: int
+        number of channels
+    """
+    def __init__(self, input_dim, hidden_dim) -> None:
+        super().__init__()
+        
+        self.conv = GATv2Conv(input_dim, hidden_dim)
+    
+    def forward(self, x, edge_index):
+        return self.conv(x, edge_index)
+
+
+class GAT(torch.nn.module):
+    """
+    A class defining the Graph Attention Network
+
+    Attributes
+    ----------
+    input_dim: int
+        number of features per node
+    hidden_dim: int
+        number of channels
+    n_classes: int
+        number of classes
+    """
+    def __init__(self, input_dim, hidden_dim, n_classes, n_layers) -> None:
+        super().__init__()
+        
+        self.layers = torch.nn.ModuleList([GATLayer(input_dim, hidden_dim) for _ in range(n_layers)])
+
+        self.linear1 = Linear(hidden_dim, hidden_dim)
+        self.linear2 = Linear(hidden_dim, n_classes)
+    
+    def forward(self, x, edge_index):
+
+        # Node embeddings
+        node_embeddings = []
+        for layer in self.layers:
+            h = layer(x, edge_index)
+            h = h.elu()
+            h = F.dropout(h, p=0.2, training=self.training)
+            node_embeddings.append(h)
+        
+        # Graph-level readout
+        x = global_mean_pool(node_embeddings[-1])
+
+        # CLassify
+        z = self.linear1(x)
+        z = z.relu()
+        z = F.dropout(z, p=0.2, training=self.training)
+        z = self.linear2(z)
+        z = F.log_softmax(z, dim=1)
+
+        return z
