@@ -3,7 +3,27 @@ import torch
 import torch.nn.functional as F
 
 from torch.nn import Linear, BatchNorm1d, ReLU, Sequential
-from torch_geometric.nn import GCNConv, GINConv, SAGEConv, GATv2Conv, global_add_pool, global_mean_pool
+from torch_geometric.nn import GCNConv, GINConv, SAGEConv, GATv2Conv, GraphNorm, global_add_pool, global_mean_pool
+
+
+class GCNLayer(torch.nn.Module):
+    """
+    A class defining the Graph Convolutional layer
+
+    Attributes
+    ----------
+    input_dim: int
+        number of features per node
+    hidden_dim: int
+        number of channels
+    """
+    def __init__(self, input_dim, hidden_dim) -> None:
+        super().__init__()
+        
+        self.conv = GCNConv(input_dim, hidden_dim)
+    
+    def forward(self, x, edge_index):
+        return self.conv(x, edge_index)
 
 
 class GCN(torch.nn.Module):
@@ -18,53 +38,41 @@ class GCN(torch.nn.Module):
         number of channels
     n_classes: int
         number of classes
+    n_layers: int
+        number of hidden layers
     """
-    def __init__(self, n_features, n_channels, n_classes):
+    def __init__(self, input_dim, hidden_dim, n_classes, n_layers):
         super().__init__()
-        
-        torch.manual_seed(4038)
-        
-        self._conv1 = GCNConv(
-            in_channels=n_features,
-            out_channels=n_channels,
-        )
 
-        self._conv2 = GCNConv(
-            in_channels=n_channels,
-            out_channels=n_channels,
-        )
+        self.layers = torch.nn.ModuleList([GINLayer(input_dim, hidden_dim) for _ in range(n_layers)])
 
-        self._conv3 = GCNConv(
-            in_channels=n_channels,
-            out_channels=n_channels,
-        )
+        self.norms = torch.nn.ModuleList([GraphNorm(hidden_dim) for _ in range(n_layers)])
 
-        self._conv4 = GCNConv(
-            in_channels=n_channels,
-            out_channels=n_channels,
-        )
-
-        self._linear1 = Linear(
-            in_features=n_channels,
-            out_features=n_classes,
-        )
+        self.linear1 = Linear(hidden_dim * n_layers, hidden_dim * n_layers)
+        self.linear2 = Linear(hidden_dim * n_layers, n_classes)
     
     def forward(self, x, edge_index, batch):
-        h1 = self._conv1(x, edge_index)
-        h1 = F.relu(h1)
-        h2 = self._conv2(h1, edge_index)
-        h2 = F.relu(h2)
-        h3 = self._conv3(h2, edge_index)
-        h3 = F.relu(h3)
-        h4 = self._conv4(h3, edge_index)
-        h4 = F.relu(h4)
         
-        p = global_add_pool(h4, batch)
-        
-        z = F.dropout(p, p=0.2, training=self.training)
-        z = self._linear1(z)
-        
-        return h1, h2, h3, h4, z
+        # Node embeddings
+        node_embeddings = []
+        for i in range(self.layers):
+            h = self.layers[i](x, edge_index)
+            h = self.norms[i](x, batch)
+            if i < len(self.layers):
+                h = h.relu()
+            node_embeddings.append(h)
+
+        # Graph-level readout
+        x = global_mean_pool(node_embeddings[-1])
+
+        # Classify
+        z = self.linear1(x)
+        z = z.relu()
+        z = F.dropout(z, p=0.2, training=self.training)
+        z = self.linear2(z)
+        z = F.log_softmax(z, dim=1)
+
+        return node_embeddings[-1], z
 
 
 class GINLayer(torch.nn.Module):
@@ -108,11 +116,11 @@ class GINModel(torch.nn.Module):
         number of channels
     n_classes: int
         number of classes
+    n_layers: int
+        number of hidden layers
     """
     def __init__(self, input_dim, hidden_dim, n_classes, n_layers):
         super().__init__()
-
-        torch.manual_seed(4030)
 
         self.layers = torch.nn.ModuleList([GINLayer(input_dim, hidden_dim) for _ in range(n_layers)])
 
