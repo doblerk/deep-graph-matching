@@ -17,7 +17,7 @@ src/quick_testing.py
 src/to_delete.py
 src/train_gcn.py
 src/utils.py
-src/__pycache_
+src/__pycache__
 
 # Personal
 res/
