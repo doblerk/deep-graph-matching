@@ -84,20 +84,20 @@ def main(args):
 
     classification = ClassifyGraphs(D, dataset)
     
-    nearest_graphs = classification.get_nearest_graphs(D, train_idx, test_idx)
+    nearest_graphs = classification.get_nearest_graphs(train_idx, test_idx)
 
-    label_nearest_graphs = classification.get_label_nearest_graphs(dataset, nearest_graphs)
+    label_nearest_graphs = classification.get_label_nearest_graphs(nearest_graphs)
 
     label_nearest_graphs_stacked = np.vstack(list((label_nearest_graphs.values())))
 
-    label_test_graphs = classification.get_ground_truth_label(dataset, nearest_graphs)
+    label_test_graphs = classification.get_ground_truth_label(nearest_graphs)
 
     unique_labels = np.unique(label_nearest_graphs_stacked)
     
     f1scores = []
     for k in range(min_k, max_k):
 
-        output = classification.classify(nearest_graphs, unique_labels, k)
+        output = classification.classify(label_nearest_graphs_stacked, unique_labels, k)
 
         f1scores.append(f1_score(label_test_graphs, output, average=args.average))
         
