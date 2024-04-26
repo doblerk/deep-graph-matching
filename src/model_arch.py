@@ -149,7 +149,7 @@ class GINModel(torch.nn.Module):
         z = self.linear2(z)
         z = F.log_softmax(z, dim=1)
 
-        return node_embeddings[-1], z
+        return node_embeddings, z#node_embeddings[-1], z
 
 
 class GCNBlock(torch.nn.Module):
@@ -369,7 +369,7 @@ class GATLayer(torch.nn.Module):
         return self.conv(x, edge_index)
 
 
-class GAT(torch.nn.module):
+class GAT(torch.nn.Module):
     """
     A class defining the Graph Attention Network
 
