@@ -19,5 +19,11 @@ src/train_gcn.py
 src/utils.py
 src/__pycache__/
 
+# Tests
+tests/__pycache__/
+
 # Personal
 res/
+
+# Miscellaneous
+gnn_ged.egg-info
