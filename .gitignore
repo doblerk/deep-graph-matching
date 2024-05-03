@@ -9,15 +9,15 @@ data/TUDataset/MUTAG/processed/
 data/TUDataset/NCI1/processed/
 data/TUDataset/OHSU/processed/
  
-# Src
-src/cluster_gin.py
-src/graphs_dissimilarity.py
-src/node_mapping_assignment.py
-src/quick_testing.py
-src/to_delete.py
-src/train_gcn.py
-src/utils.py
-src/__pycache__/
+# Scripts
+gnn_ged/cluster_gin.py
+gnn_ged/graphs_dissimilarity.py
+gnn_ged/node_mapping_assignment.py
+gnn_ged/quick_testing.py
+gnn_ged/to_delete.py
+gnn_ged/train_gcn.py
+gnn_ged/utils.py
+gnn_ged/__pycache__/
 
 # Tests
 tests/__pycache__/
