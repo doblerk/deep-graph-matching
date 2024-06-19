@@ -39,11 +39,8 @@ def test(test_loader, device, model, criterion, loader_size):
     for data in test_loader:
         data = data.to(device)
         _, z = model(data.x, data.edge_index, data.batch)
-        pred = z.argmax(dim=1)
-        acc += int((pred == data.y).sum()) / loader_size
-        loss = criterion(z, data.y)
-        
-        loss += (loss.item() * len(data)) / loader_size
+        acc += int((z.argmax(dim=1) == data.y).sum()) / loader_size
+        loss += criterion(z, data.y) / loader_size
     return acc, loss
 
 
@@ -140,23 +137,16 @@ def main(args):
     dataset_idx = np.arange(0, len(dataset))
     np.random.shuffle(dataset_idx)
 
-    train_idx = dataset_idx[:int(len(dataset)*0.8)]
-    train_dataset = dataset[train_idx]
-
-    # Load the dataset from TUDataset
-    dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
-    
-    dataset_idx = np.arange(0, len(dataset))
-    np.random.shuffle(dataset_idx)
-
     train_idx, test_idx = dataset_idx[:int(len(dataset)*0.8)], dataset_idx[int(len(dataset)*0.8):]
-    train_dataset = dataset[train_idx]
 
     # Save the train and test indices
-    with open(os.path.join(args.output_dir, 'test_indices.pkl'), 'wb') as fp:
-        pickle.dump(test_idx.tolist(), fp)
+    indices = {'train_idx': train_idx, 'test_idx': test_idx}
+
+    with open(os.path.join(args.output_dir, 'indices.pkl'), 'wb') as fp:
+        pickle.dump(indices, fp)
 
     # Perform k-fold cross-testidation
+    train_dataset = dataset[train_idx]
     perform_kfold_cv(dataset, train_dataset, device, args)
 
 

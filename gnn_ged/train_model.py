@@ -26,7 +26,7 @@ def train(train_loader, device, optimizer, model, criterion):
 
 
 @torch.no_grad()
-def test(test_loader, device, model, criterion, loader_size):
+def test(test_loader, device, model, criterion):
     '''Evaluates the model and returns the accuracy and loss'''
     model.eval()
     acc = 0
@@ -34,10 +34,8 @@ def test(test_loader, device, model, criterion, loader_size):
     for data in test_loader:
         data = data.to(device)
         _, z = model(data.x, data.edge_index, data.batch)
-        pred = z.argmax(dim=1)
-        acc += int((pred == data.y).sum()) / loader_size
-        loss = criterion(z, data.y)
-        loss += (loss.item() * len(data)) / loader_size
+        acc += int((z.argmax(dim=1) == data.y).sum()) / len(test_loader.dataset)
+        loss += criterion(z, data.y) / len(test_loader)
     return acc, loss
 
 
@@ -124,14 +122,10 @@ def main(args):
     # Load the dataset from TUDataset
     dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
     
-    with open(os.path.join(args.output_dir, 'test_indices.pkl'), 'rb') as fp:
-        test_idx = pickle.load(fp)
+    with open(os.path.join(args.output_dir, 'indices.pkl'), 'rb') as fp:
+        indices = pickle.load(fp)
 
-    dataset_idx = np.arange(0, len(dataset))
-    train_idx = np.setdiff1d(dataset_idx, test_idx)
-    
-    np.random.shuffle(train_idx)
-
+    train_idx, test_idx = indices['train_idx'], indices['test_idx']
     train_dataset, test_dataset = dataset[train_idx], dataset[test_idx]
 
     # Save the train and test indices
