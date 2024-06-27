@@ -38,11 +38,11 @@ class ClassifyGraphs:
         return nearest_graphs
 
     def get_label_nearest_graphs(self,
-                                 nearest_graphs: dict[int, List[int]]) -> dict[int, int]:
-        laebel_nearest_graphs = dict()
+                                 nearest_graphs: dict[int, List[int]]) -> dict[int, List[int]]:
+        label_nearest_graphs = dict()
         for k,v in nearest_graphs.items():
-            laebel_nearest_graphs[k] = [self.dataset[x].y.item() for x in v]
-        return laebel_nearest_graphs
+            label_nearest_graphs[k] = [self.dataset[x].y.item() for x in v]
+        return label_nearest_graphs
     
     def get_ground_truth_label(self,
                                nearest_graphs: dict[int, List[int]]) -> np.ndarray:
@@ -50,11 +50,11 @@ class ClassifyGraphs:
         return ground_truth_label
     
     def classify(self,
-                 nearest_graphs: dict[int, List[int]],
-                 ground_truth_label: np.ndarray,
+                 nearest_graphs: np.ndarray,
+                 unique_labels: List[int],
                  k: int) -> np.ndarray:
         sub_classification = nearest_graphs[:,:k]
-        output = np.vstack([np.sum(sub_classification == x, axis=1) for x in ground_truth_label])
+        output = np.vstack([np.sum(sub_classification == x, axis=1) for x in unique_labels])
         majority_vote = np.argmax(output, axis=0)
         return majority_vote
 
@@ -73,9 +73,10 @@ def get_args_parser():
 
 def main(args):
     D = np.load(args.distance_matrix)
+    
     with open(args.root_indices, 'rb') as fp:
         indices = pickle.load(fp)
-    
+
     train_idx, test_idx = indices[0], indices[1]
     
     dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
@@ -93,14 +94,14 @@ def main(args):
     label_test_graphs = classification.get_ground_truth_label(nearest_graphs)
 
     unique_labels = np.unique(label_nearest_graphs_stacked)
-    
+
     f1scores = []
     for k in range(min_k, max_k):
 
         output = classification.classify(label_nearest_graphs_stacked, unique_labels, k)
 
         f1scores.append(f1_score(label_test_graphs, output, average=args.average))
-        
+    
     with open(os.path.join(args.output_dir, 'f1_scores.pkl'), 'wb') as fp:
         pickle.dump(f1scores, fp)
 
