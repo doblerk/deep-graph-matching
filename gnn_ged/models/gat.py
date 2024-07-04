@@ -33,7 +33,7 @@ class GATLayer(torch.nn.Module):
         return self.conv(x, edge_index)
 
 
-class GAT(torch.nn.Module):
+class Model(torch.nn.Module):
     """
     A class defining the Graph Attention Network
 
