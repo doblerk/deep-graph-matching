@@ -2,7 +2,7 @@ import os
 import torch
 import torch.nn.functional as F
 
-from torch.nn import Linear, BatchNorm1d, ReLU, Sequential
+from torch.nn import Linear, BatchNorm1d, ReLU, Dropout, Sequential
 from torch_geometric.nn import GCNConv, GINConv, SAGEConv, GATv2Conv, GraphNorm, global_add_pool, global_mean_pool
 
 
@@ -44,19 +44,28 @@ class GCN(torch.nn.Module):
     def __init__(self, input_dim, hidden_dim, n_classes, n_layers):
         super().__init__()
 
-        self.layers = torch.nn.ModuleList([GINLayer(input_dim, hidden_dim) for _ in range(n_layers)])
+        self.conv_layers = [GCNLayer(input_dim, hidden_dim)]
+        for _ in range(n_layers - 1):
+            self.conv_layers.append(GCNLayer(hidden_dim, hidden_dim))
+        self.conv_layers = torch.nn.ModuleList(self.conv_layers)
 
-        self.norms = torch.nn.ModuleList([GraphNorm(hidden_dim) for _ in range(n_layers)])
+        self.norms = torch.nn.ModuleList(
+            [GraphNorm(hidden_dim) for _ in range(n_layers)]
+        )
 
-        self.linear1 = Linear(hidden_dim * n_layers, hidden_dim * n_layers)
-        self.linear2 = Linear(hidden_dim * n_layers, n_classes)
+        self.dense_layers = Sequential(
+            Linear(hidden_dim * n_layers, hidden_dim * n_layers),
+            ReLU(),
+            Dropout(p=0.2),
+            Linear(hidden_dim * n_layers, n_classes)
+        )
     
     def forward(self, x, edge_index, batch):
         
         # Node embeddings
         node_embeddings = []
         for i in range(self.layers):
-            h = self.layers[i](x, edge_index)
+            h = self.conv_layers[i](x, edge_index)
             h = self.norms[i](x, batch)
             if i < len(self.layers):
                 h = h.relu()
@@ -66,10 +75,7 @@ class GCN(torch.nn.Module):
         x = global_mean_pool(node_embeddings[-1])
 
         # Classify
-        z = self.linear1(x)
-        z = z.relu()
-        z = F.dropout(z, p=0.2, training=self.training)
-        z = self.linear2(z)
+        z = self.dense_layers(x)
         z = F.log_softmax(z, dim=1)
 
         return node_embeddings[-1], z
@@ -122,34 +128,40 @@ class GINModel(torch.nn.Module):
     def __init__(self, input_dim, hidden_dim, n_classes, n_layers):
         super().__init__()
 
-        self.layers = torch.nn.ModuleList([GINLayer(input_dim, hidden_dim) for _ in range(n_layers)])
+        self.conv_layers = [GINLayer(input_dim, hidden_dim)]
+        for _ in range(n_layers - 1):
+            self.conv_layers.append(GINLayer(hidden_dim, hidden_dim))
+        self.conv_layers = torch.nn.ModuleList(self.conv_layers)
 
-        self.linear1 = Linear(hidden_dim * n_layers, hidden_dim * n_layers)
-        self.linear2 = Linear(hidden_dim * n_layers, n_classes)
+        self.dense_layers = Sequential(
+            Linear(hidden_dim * n_layers, hidden_dim * n_layers),
+            ReLU(),
+            Dropout(p=0.2),
+            Linear(hidden_dim * n_layers, n_classes)
+        )
     
     def forward(self, x, edge_index, batch):
         
         # Node embeddings
         node_embeddings = []
-        for layer in self.layers:
-            node_embeddings.append(layer(x, edge_index))
-
+        for layer in self.conv_layers:
+            x = layer(x, edge_index)
+            node_embeddings.append(x)
+        
         # Graph-level readout
         graph_pooled = []
         for graph in node_embeddings:
-            graph_pooled.append(global_add_pool(graph, batch))
+            pooled = global_add_pool(graph, batch)
+            graph_pooled.append(pooled)
         
         # Concatenate graph embeddings (original version uses addition)
         h = torch.cat(graph_pooled, dim=1)
 
         # Classify
-        z = self.linear1(h)
-        z = z.relu()
-        z = F.dropout(z, p=0.2, training=self.training)
-        z = self.linear2(z)
+        z = self.dense_layers(h)
         z = F.log_softmax(z, dim=1)
 
-        return node_embeddings, z#node_embeddings[-1], z
+        return node_embeddings[-1], z
 
 
 class GCNBlock(torch.nn.Module):
@@ -359,11 +371,13 @@ class GATLayer(torch.nn.Module):
         number of features per node
     hidden_dim: int
         number of channels
+    n_heads: int
+        number of attention heads
     """
-    def __init__(self, input_dim, hidden_dim) -> None:
+    def __init__(self, input_dim, hidden_dim, n_heads=8, dropout=0.2, concat=True) -> None:
         super().__init__()
         
-        self.conv = GATv2Conv(input_dim, hidden_dim)
+        self.conv = GATv2Conv(input_dim, hidden_dim, n_heads, dropout, concat)
     
     def forward(self, x, edge_index):
         return self.conv(x, edge_index)
@@ -379,35 +393,42 @@ class GAT(torch.nn.Module):
         number of features per node
     hidden_dim: int
         number of channels
+    n_heads: int
+        number of attention heads
     n_classes: int
         number of classes
+    n_layers: int
+        number of layers
     """
-    def __init__(self, input_dim, hidden_dim, n_classes, n_layers) -> None:
+    def __init__(self, input_dim, hidden_dim, n_heads, n_classes, n_layers) -> None:
         super().__init__()
         
-        self.layers = torch.nn.ModuleList([GATLayer(input_dim, hidden_dim) for _ in range(n_layers)])
+        dropout = 0.2
+        self.conv_layers = torch.nn.ModuleList()
 
-        self.linear1 = Linear(hidden_dim, hidden_dim)
-        self.linear2 = Linear(hidden_dim, n_classes)
-    
+        self.conv_layers.append(GATLayer(input_dim, hidden_dim, n_heads, dropout))
+
+        for _ in range(n_layers - 2):
+            self.conv_layers.append(GATLayer(hidden_dim * n_heads, hidden_dim, n_heads, dropout)) # last one with just one head?
+        
+        self.conv_layers.append(GATLayer(hidden_dim * n_heads, n_classes, n_heads=1, dropout=dropout, concat=False))
+
     def forward(self, x, edge_index):
 
         # Node embeddings
         node_embeddings = []
-        for layer in self.layers:
-            h = layer(x, edge_index)
-            h = h.elu()
-            h = F.dropout(h, p=0.2, training=self.training)
+        for i in range(len(self.conv_layers)):
+            h = self.conv_layers[i](x, edge_index)
+            if i < len(range(self.conv_layers)) - 1:
+                h = F.dropout(h, p=0.2, training=self.training)
+                h = h.elu()
             node_embeddings.append(h)
         
         # Graph-level readout
         x = global_mean_pool(node_embeddings[-1])
 
         # CLassify
-        z = self.linear1(x)
-        z = z.relu()
-        z = F.dropout(z, p=0.2, training=self.training)
-        z = self.linear2(z)
+        z = self.dense_layers(x)
         z = F.log_softmax(z, dim=1)
 
         return z
