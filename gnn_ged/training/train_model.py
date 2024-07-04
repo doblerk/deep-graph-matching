@@ -1,16 +1,16 @@
 import os
-import json
 import argparse
 import datetime
+import importlib
 
-import model_arch
 import torch
 import pickle
 import numpy as np
+
 from time import time
 from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
-
+from torch_geometric.transforms import NormalizeFeatures
 
 
 def train(train_loader, device, optimizer, model, criterion):
@@ -50,7 +50,7 @@ def extract_embeddings(train_dataset, train_idx, test_dataset, test_idx, device,
         h, _ = model(data.x, data.edge_index, data.batch)
         train_dic[train_idx[i]] = h.detach().cpu().numpy()
     
-    with open(os.path.join(args.output_dir, 'train_embeddings2.pkl'), 'wb') as fp:
+    with open(os.path.join(args.output_dir, 'train_embeddings.pkl'), 'wb') as fp:
         pickle.dump(train_dic, fp)
 
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
@@ -61,13 +61,15 @@ def extract_embeddings(train_dataset, train_idx, test_dataset, test_idx, device,
         h, _ = model(data.x, data.edge_index, data.batch)
         test_dic[test_idx[i]] = h.detach().cpu().numpy()
 
-    with open(os.path.join(args.output_dir, 'test_embeddings2.pkl'), 'wb') as fp:
+    with open(os.path.join(args.output_dir, 'test_embeddings.pkl'), 'wb') as fp:
         pickle.dump(test_dic, fp)
 
 
 def train_model(train_loader, test_loader, device, optimizer, model, criterion, args):
     '''Trains the model, reports the accuracy and loss, and saves the last ckpt'''
     t0 = time()
+    best_loss = np.inf
+    patience_counter = 0
 
     for epoch in range(args.epochs):
 
@@ -79,32 +81,45 @@ def train_model(train_loader, test_loader, device, optimizer, model, criterion, 
         if epoch % 10 == 0:
             print(f'Epoch {epoch:<3} | Train Loss: {train_loss:.4f} | Train Acc: {train_accuracy*100:.2f} | Test Loss: {test_loss:.4f} | Test Acc: {test_accuracy*100:.2f}')
         
-        # log_stats = {'Epoch': epoch, 'Train loss': train_loss.item(), 'Train accuracy': train_accuracy, 'Test loss': test_loss.item(), 'Test accuracy': test_accuracy}
-        # with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
-        #     f.write(json.dumps(log_stats) + '\n')
+        if test_loss < best_loss:
+            best_loss = test_loss
+            patience_counter = 0
+        else:
+            patience_counter += 1
+        
+        log_stats = {'Epoch': epoch, 'Train loss': train_loss.item(), 'Train accuracy': train_accuracy, 'Test loss': test_loss.item(), 'Test accuracy': test_accuracy}
+        with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
+            f.write(json.dumps(log_stats) + '\n')
+        
+        if patience_counter >= args.patience:
+            print(f'Early stopping at epoch {epoch}')
+            break
     
     t1 = time()
     computation_time = str(datetime.timedelta(seconds=int(t1 - t0)))
     print(f'Training time {computation_time}')
 
     # Save the model
-    # save_dict = {
-    #     'model_state_dict': model.state_dict(),
-    #     'optimizer': optimizer.state_dict(),
-    #     'epoch': epoch + 1,
-    # }
-    # torch.save(save_dict, os.path.join(args.output_dir, f'checkpoint.pth'))
+    save_dict = {
+        'model_state_dict': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
+        'epoch': epoch + 1,
+    }
+    torch.save(save_dict, os.path.join(args.output_dir, 'checkpoint.pth'))
 
 
 def get_args_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset_dir', type=str, help='Path to dataset directory')
     parser.add_argument('--dataset_name', type=str, help='Dataset name')
+    parser.add_argument('--arch', type=str, choices=['gin', 'gat', 'gcn', 'gsage'], help='GNN architecture')
     parser.add_argument('--batch_size', type=int, default=64, help='Training batch size')
     parser.add_argument('--hidden_dim', type=int, default=64, help='Hidden channel dimension')
     parser.add_argument('--n_layers', type=int, default=3, help='Number of convolution layers')
     parser.add_argument('--epochs', type=int, default=201, help='Number of epochs')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
+    parser.add_argument('--patience', type=int, default=20, help='Early stopping patience')
+    parser.add_argument('--use_attrs', action='store_true', help='Use node attributes')
     parser.add_argument('--output_dir', type=str, help='Path to output directory')
     return parser
 
@@ -112,25 +127,24 @@ def get_args_parser():
 def main(args):
 
     # Write logs
-    # log_args = {k:str(v) for (k,v) in sorted(dict(vars(args)).items())}
-    # with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
-    #     f.write(json.dumps(log_args) + '\n')
+    log_args = {k:str(v) for (k,v) in sorted(dict(vars(args)).items())}
+    with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
+        f.write(json.dumps(log_args) + '\n')
     
     # Set device to CUDA
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Load the dataset from TUDataset
-    dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
+    if args.use_attrs:
+        dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name, use_node_attr=True, transform=NormalizeFeatures())
+    else:
+        dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
     
     with open(os.path.join(args.output_dir, 'indices.pkl'), 'rb') as fp:
         indices = pickle.load(fp)
 
     train_idx, test_idx = indices[0], indices[1]
     train_dataset, test_dataset = dataset[train_idx], dataset[test_idx]
-
-    # Save the train and test indices
-    # with open(os.path.join(args.output_dir, 'indices.pkl'), 'wb') as fp:
-    #     pickle.dump([train_idx.tolist(), test_idx], fp)
 
     # Prepare the data
     train_loader = DataLoader(
@@ -146,7 +160,8 @@ def main(args):
     )
     
     # Initialize the model
-    model = model_arch.GINModel(
+    model_module = importlib.import_module(f'gnn_ged.models.{args.arch}')
+    model = model_module.Model(
             input_dim=dataset.num_features,
             hidden_dim=args.hidden_dim,
             n_classes=dataset.num_classes,

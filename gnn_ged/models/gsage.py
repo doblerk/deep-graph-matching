@@ -33,7 +33,7 @@ class GraphSAGELayer(torch.nn.Module):
         return self.conv(x, edge_index)
 
 
-class GraphSAGE(torch.nn.Module):
+class Model(torch.nn.Module):
     """
     A class defining the GraphSAGE Network
 
