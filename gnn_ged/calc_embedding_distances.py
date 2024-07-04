@@ -30,6 +30,6 @@ class NodeMapping:
         return cdist(self.source_embedding, self.target_embedding, metric='euclidean')
 
     def compute_node_mapping(self, 
-                             embedding_distances: np.ndarray) -> List[List[int, int]]:
+                             embedding_distances: np.ndarray) -> List[List[int]]:
         ri, ci = linear_sum_assignment(embedding_distances)
         return list(zip(ri, ci))

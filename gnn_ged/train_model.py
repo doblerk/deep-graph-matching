@@ -50,7 +50,7 @@ def extract_embeddings(train_dataset, train_idx, test_dataset, test_idx, device,
         h, _ = model(data.x, data.edge_index, data.batch)
         train_dic[train_idx[i]] = h.detach().cpu().numpy()
     
-    with open(os.path.join(args.output_dir, 'train_embeddings.pkl'), 'wb') as fp:
+    with open(os.path.join(args.output_dir, 'train_embeddings2.pkl'), 'wb') as fp:
         pickle.dump(train_dic, fp)
 
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
@@ -61,7 +61,7 @@ def extract_embeddings(train_dataset, train_idx, test_dataset, test_idx, device,
         h, _ = model(data.x, data.edge_index, data.batch)
         test_dic[test_idx[i]] = h.detach().cpu().numpy()
 
-    with open(os.path.join(args.output_dir, 'test_embeddings.pkl'), 'wb') as fp:
+    with open(os.path.join(args.output_dir, 'test_embeddings2.pkl'), 'wb') as fp:
         pickle.dump(test_dic, fp)
 
 
@@ -73,27 +73,27 @@ def train_model(train_loader, test_loader, device, optimizer, model, criterion, 
 
         train(train_loader, device, optimizer, model, criterion)
 
-        train_accuracy, train_loss = test(train_loader, device, model, criterion, len(train_loader.dataset))
-        test_accuracy, test_loss = test(test_loader, device, model, criterion, len(test_loader.dataset))
+        train_accuracy, train_loss = test(train_loader, device, model, criterion)
+        test_accuracy, test_loss = test(test_loader, device, model, criterion)
 
         if epoch % 10 == 0:
             print(f'Epoch {epoch:<3} | Train Loss: {train_loss:.4f} | Train Acc: {train_accuracy*100:.2f} | Test Loss: {test_loss:.4f} | Test Acc: {test_accuracy*100:.2f}')
         
-        log_stats = {'Epoch': epoch, 'Train loss': train_loss.item(), 'Train accuracy': train_accuracy, 'Test loss': test_loss.item(), 'Test accuracy': test_accuracy}
-        with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
-            f.write(json.dumps(log_stats) + '\n')
+        # log_stats = {'Epoch': epoch, 'Train loss': train_loss.item(), 'Train accuracy': train_accuracy, 'Test loss': test_loss.item(), 'Test accuracy': test_accuracy}
+        # with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
+        #     f.write(json.dumps(log_stats) + '\n')
     
     t1 = time()
     computation_time = str(datetime.timedelta(seconds=int(t1 - t0)))
     print(f'Training time {computation_time}')
 
     # Save the model
-    save_dict = {
-        'model_state_dict': model.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'epoch': epoch + 1,
-    }
-    torch.save(save_dict, os.path.join(args.output_dir, f'checkpoint.pth'))
+    # save_dict = {
+    #     'model_state_dict': model.state_dict(),
+    #     'optimizer': optimizer.state_dict(),
+    #     'epoch': epoch + 1,
+    # }
+    # torch.save(save_dict, os.path.join(args.output_dir, f'checkpoint.pth'))
 
 
 def get_args_parser():
@@ -112,9 +112,9 @@ def get_args_parser():
 def main(args):
 
     # Write logs
-    log_args = {k:str(v) for (k,v) in sorted(dict(vars(args)).items())}
-    with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
-        f.write(json.dumps(log_args) + '\n')
+    # log_args = {k:str(v) for (k,v) in sorted(dict(vars(args)).items())}
+    # with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
+    #     f.write(json.dumps(log_args) + '\n')
     
     # Set device to CUDA
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -125,12 +125,12 @@ def main(args):
     with open(os.path.join(args.output_dir, 'indices.pkl'), 'rb') as fp:
         indices = pickle.load(fp)
 
-    train_idx, test_idx = indices['train_idx'], indices['test_idx']
+    train_idx, test_idx = indices[0], indices[1]
     train_dataset, test_dataset = dataset[train_idx], dataset[test_idx]
 
     # Save the train and test indices
-    with open(os.path.join(args.output_dir, 'indices.pkl'), 'wb') as fp:
-        pickle.dump([train_idx.tolist(), test_idx], fp)
+    # with open(os.path.join(args.output_dir, 'indices.pkl'), 'wb') as fp:
+    #     pickle.dump([train_idx.tolist(), test_idx], fp)
 
     # Prepare the data
     train_loader = DataLoader(
