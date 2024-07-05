@@ -4,9 +4,9 @@ from scipy.spatial.distance import cdist
 from scipy.optimize import linear_sum_assignment
 
 
-class NodeMapping:
+class NodeAssignment:
     """
-    Compute the node mapping using the source and target embeddings.
+    Compute the node assignment using the source and target embeddings.
 
     Attributes
     ----------
@@ -16,7 +16,7 @@ class NodeMapping:
     Methods
     -------
     compute_embedding_distances()
-    compute_node_mapping(embedding_distances)
+    compute_node_assignment(embedding_distances)
     """
 
     def __init__(self,
@@ -29,7 +29,7 @@ class NodeMapping:
     def compute_embedding_distances(self) -> np.ndarray:
         return cdist(self.source_embedding, self.target_embedding, metric='euclidean')
 
-    def compute_node_mapping(self, 
+    def compute_node_assignment(self, 
                              embedding_distances: np.ndarray) -> List[List[int]]:
         ri, ci = linear_sum_assignment(embedding_distances)
         return list(zip(ri, ci))
