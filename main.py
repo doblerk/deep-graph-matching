@@ -4,7 +4,7 @@ import argparse
 import numpy as np
 
 from time import time
-
+from pathlib import Path
 from torch_geometric.utils import to_networkx 
 from torch_geometric.datasets import TUDataset
 
@@ -30,30 +30,64 @@ def load_embeddings(args):
 
 def calc_matrix_distances(matrix_distances,
                           dataset_nx,
-                          train_idx,
-                          test_idx,
-                          train_embeddings,
-                          test_embeddings,
+                        #   train_idx,
+                        #   test_idx,
+                        #   train_embeddings,
+                        #   test_embeddings,
+                        files,
                           args):
     t0 = time()
     
-    for x_test in range(0, matrix_distances.shape[0]):
+    # for x_test in range(0, matrix_distances.shape[0]):
         
-        g1_nx = dataset_nx[test_idx[x_test]]
+    #     g1_nx = dataset_nx[test_idx[x_test]]
 
-        for y_train in range(0, matrix_distances.shape[1]):
+    #     for y_train in range(0, matrix_distances.shape[1]):
 
-            g2_nx = dataset_nx[train_idx[y_train]]
+    #         g2_nx = dataset_nx[train_idx[y_train]]
+
+    #         if g1_nx.number_of_nodes() <= g2_nx.number_of_nodes():
+    #             # heuristic -> the smaller graph is always the source graph
+    #             source_embedding = test_embeddings[test_idx[x_test]]
+    #             target_embedding = train_embeddings[train_idx[y_train]]
+    #             source_graph = g1_nx
+    #             target_graph = g2_nx
+    #         else:
+    #             source_embedding = train_embeddings[train_idx[y_train]]
+    #             target_embedding = test_embeddings[test_idx[x_test]]
+    #             source_graph = g2_nx
+    #             target_graph = g1_nx
+            
+    #         node_assignment = NodeAssignment(source_embedding, target_embedding)
+
+    #         embedding_distances = node_assignment.compute_embedding_distances()
+
+    #         assignment = node_assignment.compute_node_assignment(embedding_distances)
+
+    #         edit_cost = EditCost(assignment, source_graph, target_graph)
+
+    #         node_cost = edit_cost.compute_cost_node_edit()
+    #         edge_cost = edit_cost.compute_cost_edge_edit()
+            
+    #         matrix_distances[x_test, y_train] = node_cost + edge_cost
+
+    for i in range(0, matrix_distances.shape[0]):
+
+        g1_nx = dataset_nx[i]
+
+        for j in range(0, matrix_distances.shape[1]):
+
+            g2_nx = dataset_nx[j]
 
             if g1_nx.number_of_nodes() <= g2_nx.number_of_nodes():
                 # heuristic -> the smaller graph is always the source graph
-                source_embedding = test_embeddings[test_idx[x_test]]
-                target_embedding = train_embeddings[train_idx[y_train]]
+                source_embedding = np.load(files[i])
+                target_embedding = np.load(files[j])
                 source_graph = g1_nx
                 target_graph = g2_nx
             else:
-                source_embedding = train_embeddings[train_idx[y_train]]
-                target_embedding = test_embeddings[test_idx[x_test]]
+                source_embedding = np.load(files[j])
+                target_embedding = np.load(files[i])
                 source_graph = g2_nx
                 target_graph = g1_nx
             
@@ -68,13 +102,13 @@ def calc_matrix_distances(matrix_distances,
             node_cost = edit_cost.compute_cost_node_edit()
             edge_cost = edit_cost.compute_cost_edge_edit()
             
-            matrix_distances[x_test, y_train] = node_cost + edge_cost
+            matrix_distances[i,j] = node_cost + edge_cost
        
     t1 = time()
     computation_time = t1 - t0
     print('Computation time: ', computation_time)
     
-    np.save(os.path.join(args.output_dir, f'distances.npy'), matrix_distances)
+    np.save(os.path.join(args.output_dir, f'all_distances.npy'), matrix_distances)
 
 
 def get_args_parser():
@@ -95,20 +129,34 @@ def main(args):
 
     dataset_nx = load_dataset(args)
     
-    train_embeddings, test_embeddings = load_embeddings(args)
+    # train_embeddings, test_embeddings = load_embeddings(args)
 
-    train_idx, test_idx = list(train_embeddings.keys()), list(test_embeddings.keys())
+    # train_idx, test_idx = list(train_embeddings.keys()), list(test_embeddings.keys())
 
-    n_train_graphs, n_test_graphs = len(train_embeddings), len(test_embeddings)
+    # n_train_graphs, n_test_graphs = len(train_embeddings), len(test_embeddings)
 
-    matrix_distances = np.zeros(shape=(n_test_graphs, n_train_graphs), dtype=np.int32)
+    # matrix_distances = np.zeros(shape=(n_test_graphs, n_train_graphs), dtype=np.int32)
+
+    # calc_matrix_distances(matrix_distances,
+    #                       dataset_nx,
+    #                       train_idx,
+    #                       test_idx,
+    #                       train_embeddings,
+    #                       test_embeddings,
+    #                       args)
+
+    files = [f'/home/dobleraemon/Documents/PhD/gnn-cppged/res/embeddings/embedding_{i}.npy' for i in range(len(dataset_nx))]
+    
+    with open(os.path.join(args.output_dir, 'indices.pkl'), 'rb') as fp:
+        indices = pickle.load(fp)
+    
+    train_idx, test_idx = indices[0], indices[1]
+
+    matrix_distances = np.zeros(shape=(len(train_idx)+len(test_idx), len(train_idx)+len(test_idx)))
 
     calc_matrix_distances(matrix_distances,
                           dataset_nx,
-                          train_idx,
-                          test_idx,
-                          train_embeddings,
-                          test_embeddings,
+                          files,
                           args)
 
 

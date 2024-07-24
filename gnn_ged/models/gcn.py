@@ -62,25 +62,26 @@ class Model(torch.nn.Module):
         )
 
         self.dense_layers = Sequential(
-            Linear(hidden_dim * n_layers, hidden_dim * n_layers),
+            Linear(hidden_dim, hidden_dim),
             ReLU(),
             Dropout(p=0.2),
-            Linear(hidden_dim * n_layers, n_classes)
+            Linear(hidden_dim, n_classes)
         )
     
     def forward(self, x, edge_index, batch):
         
         # Node embeddings
         node_embeddings = []
-        for i in range(self.layers):
-            h = self.conv_layers[i](x, edge_index)
-            h = self.norms[i](x, batch)
-            if i < len(self.layers):
-                h = h.relu()
-            node_embeddings.append(h)
+        for i in range(len(self.conv_layers)):
+            x = self.conv_layers[i](x, edge_index)
+            x = self.norms[i](x, batch)
+            if i < len(self.conv_layers) - 1:
+                x = F.dropout(x, p=0.5, training=self.training)
+                x = F.relu(x)     
+            node_embeddings.append(x)
 
         # Graph-level readout
-        x = global_mean_pool(node_embeddings[-1])
+        x = global_mean_pool(node_embeddings[-1], batch)
 
         # Classify
         z = self.dense_layers(x)

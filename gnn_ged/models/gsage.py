@@ -9,7 +9,7 @@
 import torch
 import torch.nn.functional as F
 
-from torch.nn import Linear
+from torch.nn import Linear, ReLU, Dropout, Sequential
 from torch_geometric.nn import SAGEConv, global_mean_pool
 
 
@@ -49,30 +49,36 @@ class Model(torch.nn.Module):
     def __init__(self, input_dim, hidden_dim, n_classes, n_layers) -> None:
         super().__init__()
         
-        self.layers = torch.nn.ModuleList([GraphSAGELayer(input_dim, hidden_dim) for _ in range(n_layers)])
+        self.conv_layers = torch.nn.ModuleList()
 
-        self.linear1 = Linear(hidden_dim, hidden_dim)
-        self.linear2 = Linear(hidden_dim, n_classes)
+        self.conv_layers.append(GraphSAGELayer(input_dim, hidden_dim))
+
+        for _ in range(n_layers - 1):
+            self.conv_layers.append(GraphSAGELayer(hidden_dim, hidden_dim))
+
+        self.dense_layers = Sequential(
+            Linear(hidden_dim, hidden_dim),
+            ReLU(),
+            Dropout(p=0.2),
+            Linear(hidden_dim, n_classes)
+        )
     
-    def forward(self, x, edge_index):
+    def forward(self, x, edge_index, batch):
 
         # Node embeddings
         node_embeddings = []
-        for layer in self.layers:
-            h = layer(x, edge_index)
-            # should I add this after each layer or all layers except the last one? If so, add if statement.
-            h = h.relu()
-            h = F.dropout(h, p=0.2, training=self.training)
-            node_embeddings.append(h)
+        for i in range(len(self.conv_layers)):
+            x = self.conv_layers[i](x, edge_index)
+            if i < len(self.conv_layers) - 1:
+                x = F.dropout(x, p=0.5, training=self.training)
+                x = F.relu(x)     
+            node_embeddings.append(x)
         
         # Graph-level readout
-        x = global_mean_pool(node_embeddings[-1])
+        x = global_mean_pool(node_embeddings[-1], batch)
 
         # Classify
-        z = self.linear1(x)
-        z = z.relu()
-        z = F.dropout(z, p=0.2, training=self.training)
-        z = self.linear2(z)
+        z = self.dense_layers(x)
         z = F.log_softmax(z, dim=1)
 
-        return z
+        return node_embeddings[-1], z
