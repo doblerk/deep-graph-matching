@@ -9,13 +9,12 @@ import pickle
 import numpy as np
 
 from time import time
-from torch.optim.lr_scheduler import StepLR
 from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
 from torch_geometric.transforms import NormalizeFeatures
 
 
-def train(train_loader, device, optimizer, model, criterion, scheduler):
+def train(train_loader, device, optimizer, model, criterion):
     '''Trains the model on train set'''
     model.train()
     for data in train_loader:
@@ -25,7 +24,6 @@ def train(train_loader, device, optimizer, model, criterion, scheduler):
         loss = criterion(z, data.y)
         loss.backward()
         optimizer.step()
-        # scheduler.step()
 
 
 @torch.no_grad()
@@ -52,10 +50,10 @@ def extract_embeddings(train_dataset, train_idx, test_dataset, test_idx, device,
         data = data.to(device)
         h, _ = model(data.x, data.edge_index, data.batch)
         train_dic[train_idx[i]] = h.detach().cpu().numpy()
-        # np.save(os.path.join(args.output_dir, f'embedding_{train_idx[i]}.npy'), h.detach().cpu().numpy())
+        np.save(os.path.join(args.output_dir, f'embedding_{train_idx[i]}.npy'), h.detach().cpu().numpy())
     
-    with open(os.path.join(args.output_dir, 'train_embeddings.pkl'), 'wb') as fp:
-        pickle.dump(train_dic, fp)
+    # with open(os.path.join(args.output_dir, 'train_embeddings.pkl'), 'wb') as fp:
+    #     pickle.dump(train_dic, fp)
 
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
     test_dic = {}
@@ -64,10 +62,10 @@ def extract_embeddings(train_dataset, train_idx, test_dataset, test_idx, device,
         data = data.to(device)
         h, _ = model(data.x, data.edge_index, data.batch)
         test_dic[test_idx[i]] = h.detach().cpu().numpy()
-        # np.save(os.path.join(args.output_dir, f'embedding_{test_idx[i]}.npy'), h.detach().cpu().numpy())
+        np.save(os.path.join(args.output_dir, f'embedding_{test_idx[i]}.npy'), h.detach().cpu().numpy())
 
-    with open(os.path.join(args.output_dir, 'test_embeddings.pkl'), 'wb') as fp:
-        pickle.dump(test_dic, fp)
+    # with open(os.path.join(args.output_dir, 'test_embeddings.pkl'), 'wb') as fp:
+    #     pickle.dump(test_dic, fp)
 
 
 def train_model(train_loader, test_loader, device, optimizer, model, criterion, args):
@@ -92,9 +90,9 @@ def train_model(train_loader, test_loader, device, optimizer, model, criterion, 
         else:
             patience_counter += 1
         
-        log_stats = {'Epoch': epoch, 'Train loss': train_loss.item(), 'Train accuracy': train_accuracy, 'Test loss': test_loss.item(), 'Test accuracy': test_accuracy}
-        with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
-            f.write(json.dumps(log_stats) + '\n')
+        # log_stats = {'Epoch': epoch, 'Train loss': train_loss.item(), 'Train accuracy': train_accuracy, 'Test loss': test_loss.item(), 'Test accuracy': test_accuracy}
+        # with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
+        #     f.write(json.dumps(log_stats) + '\n')
         
         if patience_counter >= args.patience:
             print(f'Early stopping at epoch {epoch}')
@@ -105,12 +103,12 @@ def train_model(train_loader, test_loader, device, optimizer, model, criterion, 
     print(f'Training time {computation_time}')
 
     # Save the model
-    save_dict = {
-        'model_state_dict': model.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'epoch': epoch + 1,
-    }
-    torch.save(save_dict, os.path.join(args.output_dir, 'checkpoint.pth'))
+    # save_dict = {
+    #     'model_state_dict': model.state_dict(),
+    #     'optimizer': optimizer.state_dict(),
+    #     'epoch': epoch + 1,
+    # }
+    # torch.save(save_dict, os.path.join(args.output_dir, 'checkpoint.pth'))
 
 
 def get_args_parser():
@@ -123,7 +121,7 @@ def get_args_parser():
     parser.add_argument('--n_layers', type=int, default=3, help='Number of convolution layers')
     parser.add_argument('--epochs', type=int, default=201, help='Number of epochs')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
-    parser.add_argument('--patience', type=int, default=50, help='Early stopping patience')
+    parser.add_argument('--patience', type=int, default=20, help='Early stopping patience')
     parser.add_argument('--use_attrs', action='store_true', help='Use node attributes')
     parser.add_argument('--output_dir', type=str, help='Path to output directory')
     return parser
@@ -132,9 +130,9 @@ def get_args_parser():
 def main(args):
 
     # Write logs
-    log_args = {k:str(v) for (k,v) in sorted(dict(vars(args)).items())}
-    with open(os.path.join(args.output_dir, 'log1.txt'), 'a') as f:
-        f.write(json.dumps(log_args) + '\n')
+    # log_args = {k:str(v) for (k,v) in sorted(dict(vars(args)).items())}
+    # with open(os.path.join(args.output_dir, 'log1.txt'), 'a') as f:
+    #     f.write(json.dumps(log_args) + '\n')
     
     # Set device to CUDA
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -176,9 +174,6 @@ def main(args):
     # Define the optimier and criterion
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.01)
     criterion = torch.nn.CrossEntropyLoss()
-
-    # Define the scheduler
-    # scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
 
     # Train the model
     train_model(train_loader, test_loader, device, optimizer, model, criterion, args)

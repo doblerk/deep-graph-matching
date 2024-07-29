@@ -3,9 +3,11 @@ import json
 import argparse
 import torch
 import pickle
-import model_arch
+import importlib
+
 import numpy as np
-from sklearn.model_selection import KFold
+
+from sklearn.model_selection import StratifiedKFold
 from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
 
@@ -48,7 +50,8 @@ def perform_kfold_cv(dataset, train_dataset, device, args):
     '''Performs k-fold cross validation'''
 
     # Initialize the model
-    model = model_arch.GINModel(
+    model_module = importlib.import_module(f'gnn_ged.models.{args.arch}')
+    model = model_module.Model(
             input_dim=dataset.num_features,
             hidden_dim=args.hidden_dim,
             n_classes=dataset.num_classes,
@@ -61,7 +64,7 @@ def perform_kfold_cv(dataset, train_dataset, device, args):
 
     # Perform K-fold cross validation
     k_fold = 10
-    kf = KFold(n_splits=k_fold, shuffle=True, random_state=None)
+    kf = StratifiedKFold(n_splits=k_fold, shuffle=True, random_state=None)
 
     # Perform k-fold cross validation to get an estimate of the model's accuracy
     val_accuracies = []
