@@ -71,7 +71,7 @@ class Model(torch.nn.Module):
             x = self.conv_layers[i](x, edge_index)
             x = F.relu(x)   
             if i < len(self.conv_layers) - 1:
-                x = F.dropout(x, p=0.5, training=self.training)
+                x = F.dropout(x, p=0.2, training=self.training)
             node_embeddings.append(x)
         
         # Graph-level readout
