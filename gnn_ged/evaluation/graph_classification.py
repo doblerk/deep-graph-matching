@@ -1,4 +1,4 @@
-import pickle
+import os
 import argparse
 import numpy as np
 
@@ -10,9 +10,9 @@ from torch_geometric.datasets import TUDataset
 
 
 def get_args_parser():
-    parser = argparse.ArgumentParser(fromfile_prefix_chars='@')
+    parser = argparse.ArgumentParser()
     parser.add_argument('--distance_matrix', type=str, help='Path to distance matrix')
-    parser.add_argument('--root_indices', type=str, help='Path to indices')
+    parser.add_argument('--indices_dir', type=str, help='Path to indices')
     parser.add_argument('--dataset_dir', type=str, help='Path to dataset directory')
     parser.add_argument('--dataset_name', type=str, help='Dataset name')
     parser.add_argument('--output_dir', type=str, help='Path to output directory')
@@ -24,10 +24,8 @@ def main(args):
 
     distance_matrix = np.load(args.distance_matrix)
     
-    with open(args.root_indices, 'rb') as fp:
-        indices = pickle.load(fp)
-    
-    train_idx, test_idx = sorted(indices[0]), sorted(indices[1])
+    train_idx = sorted(np.load(os.path.join(args.indices_dir, 'train_indices.npy')))
+    test_idx = sorted(np.load(os.path.join(args.indices_dir, 'test_indices.npy')))
 
     idx = list(range(distance_matrix.shape[0]))
 

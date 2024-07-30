@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 
 from torch.nn import Linear, ReLU, Dropout, Sequential
-from torch_geometric.nn import GCNConv, GraphNorm, global_mean_pool
+from torch_geometric.nn import GCNConv, GraphNorm, global_add_pool
 
 
 class GCNLayer(torch.nn.Module):
@@ -75,13 +75,13 @@ class Model(torch.nn.Module):
         for i in range(len(self.conv_layers)):
             x = self.conv_layers[i](x, edge_index)
             x = self.norms[i](x, batch)
-            x = F.relu(x)
+            x = F.elu(x)
             if i < len(self.conv_layers) - 1:
-                x = F.dropout(x, p=0.5, training=self.training)  
+                x = F.dropout(x, p=0.2, training=self.training)  
             node_embeddings.append(x)
 
         # Graph-level readout
-        x = global_mean_pool(node_embeddings[-1], batch)
+        x = global_add_pool(node_embeddings[-1], batch)
 
         # Classify
         z = self.dense_layers(x)

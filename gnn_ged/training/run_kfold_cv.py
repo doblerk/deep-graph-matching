@@ -2,7 +2,6 @@ import os
 import json
 import argparse
 import torch
-import pickle
 import importlib
 
 import numpy as np
@@ -10,7 +9,6 @@ import numpy as np
 from sklearn.model_selection import StratifiedKFold
 from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
-
 
 
 def reset_weights(m):
@@ -46,7 +44,7 @@ def test(test_loader, device, model, criterion, loader_size):
     return acc, loss
 
 
-def perform_kfold_cv(dataset, train_dataset, device, args):
+def perform_kfold_cv(dataset, train_dataset, train_labels, device, args):
     '''Performs k-fold cross validation'''
 
     # Initialize the model
@@ -59,7 +57,7 @@ def perform_kfold_cv(dataset, train_dataset, device, args):
     ).to(device)
 
     # Define the optimier and criterion
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.0001)
     criterion = torch.nn.CrossEntropyLoss()
 
     # Perform K-fold cross validation
@@ -70,7 +68,7 @@ def perform_kfold_cv(dataset, train_dataset, device, args):
     val_accuracies = []
     val_losses = []
 
-    for fold, (train_idx, val_idx) in enumerate(kf.split(train_dataset)):
+    for fold, (train_idx, val_idx) in enumerate(kf.split(train_dataset, train_labels)):
         print(f'--------\nFold {fold + 1}\n--------')
 
         # Define the data loaders for the current fold
@@ -116,11 +114,13 @@ def get_args_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset_dir', type=str, help='Path to dataset directory')
     parser.add_argument('--dataset_name', type=str, help='Dataset name')
+    parser.add_argument('--arch', type=str, choices=['gin', 'gat', 'gcn', 'gsage'], help='GNN architecture')
     parser.add_argument('--batch_size', type=int, default=64, help='Training batch size')
     parser.add_argument('--hidden_dim', type=int, default=64, help='Hidden channel dimension')
     parser.add_argument('--n_layers', type=int, default=3, help='Number of convolution layers')
     parser.add_argument('--epochs', type=int, default=201, help='Number of epochs')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
+    parser.add_argument('--indices_dir', type=str, help='Path to indices')
     parser.add_argument('--output_dir', type=str, help='Path to output directory')
     return parser
 
@@ -140,17 +140,13 @@ def main(args):
     dataset_idx = np.arange(0, len(dataset))
     np.random.shuffle(dataset_idx)
 
-    train_idx, test_idx = dataset_idx[:int(len(dataset)*0.8)], dataset_idx[int(len(dataset)*0.8):]
+    train_idx = np.load(os.path.join(args.indices_dir, 'train_indices.npy'))
 
-    # Save the train and test indices
-    indices = {'train_idx': train_idx, 'test_idx': test_idx}
-
-    with open(os.path.join(args.output_dir, 'indices.pkl'), 'wb') as fp:
-        pickle.dump(indices, fp)
+    train_labels = [dataset[i].y.item() for i in train_idx]
 
     # Perform k-fold cross-testidation
     train_dataset = dataset[train_idx]
-    perform_kfold_cv(dataset, train_dataset, device, args)
+    perform_kfold_cv(dataset, train_dataset, train_labels, device, args)
 
 
 if __name__ == '__main__':

@@ -4,11 +4,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def plot(pred_distances, true_distances):
+def plot(args):
 
     # Load and flatten the matrix distances
-    pred_distances_flatten = np.load(pred_distances).flatten(order='C')
-    true_distances_flatten = np.load(true_distances).flatten(order='C')
+    pred_distances_flatten = np.load(args.distance_matrix_pred).flatten(order='C')
+    true_distances_flatten = np.load(args.distance_matrix_true).flatten(order='C')
 
     # Normalize the values
     pred_distances_normalized = ((pred_distances_flatten - np.min(pred_distances_flatten)) / (np.max(pred_distances_flatten) - np.min(pred_distances_flatten))).squeeze()
@@ -28,15 +28,13 @@ def plot(pred_distances, true_distances):
 def get_args_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--distance_matrix_pred', type=str, help='Path to predicted distance matrix')
-    parser.add_argument('--distance_matrix_bpged_upper', type=str, help='Path to BP-GED distance matrix')
+    parser.add_argument('--distance_matrix_true', type=str, help='Path to BP-GED distance matrix')
     parser.add_argument('--output_dir', type=str, help='Path to output directory')
     return parser
 
 
 def main(args):
-    plot(args.distance_matrix_pred,
-         args.distance_matrix_bpged_upper,
-         args.output_dir)
+    plot(args)
 
 
 if __name__ == '__main__':
