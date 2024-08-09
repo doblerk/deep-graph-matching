@@ -13,6 +13,7 @@ data/TUDataset/OHSU/processed/
 gnn_ged/quick_testing.py
 gnn_ged/utils.py
 gnn_ged/__pycache__/
+gnn_ged/models/__pycache__/
 
 # Tests
 tests/__pycache__/
