@@ -15,6 +15,9 @@ source venv/bin/activate
 
 # Install required packages
 pip3 install -r requirements.txt
+
+# Install the Python package
+python3 -m pip install -e .
 ```
 
 ## How to use
