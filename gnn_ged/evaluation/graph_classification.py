@@ -42,6 +42,11 @@ def main(args):
     train_labels = list(dataset[train_idx].y.numpy())
     test_labels = list(dataset[test_idx].y.numpy())
 
+    if args.average == 'average':
+        scoring = 'f1'
+    else:
+        scoring = 'f1_micro'
+
     ks = (3, 5, 7, 11)
     best_k = None
     best_score = 0
@@ -54,8 +59,8 @@ def main(args):
                                  train_distance_matrix,
                                  train_labels,
                                  cv=kf,
-                                 scoring='f1')
-
+                                 scoring=scoring)
+        
         mean_score = scores.mean()
 
         if mean_score > best_score:

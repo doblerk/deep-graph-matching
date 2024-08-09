@@ -21,7 +21,11 @@ pip3 install -r requirements.txt
 
 #### Train a GNN model
 ```bash
-python3 gnn_ged/training/train_model.py --dataset_dir data/TUDataset --dataset_name MUTAG --arch gin --output_dir res/MUTAG/GIN/raw/
+# Split the data set
+python3 gnn_ged/utils/split_dataset.py --dataset_dir data/TUDataset/ --dataset_name MUTAG --output_dir res/MUTAG/
+
+# Train the model
+python3 gnn_ged/training/train_model.py --dataset_dir data/TUDataset --dataset_name MUTAG --arch gin --indices_dir res/MUTAG --output_dir res/MUTAG/GIN/raw/
 ```
 
 #### Compute GED
