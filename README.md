@@ -2,6 +2,27 @@
 
 This repository contains the implementation of GNN-GED framework to perform graph matching learning with graph neural networks.
 
+## Folder structure
+```bash
+├── data
+│   └── TUDataset
+│       ├── MUTAG
+│       │   └── raw
+├── gnn_ged
+│   ├── assignment
+│   ├── edit_cost
+│   ├── evaluation
+│   ├── models
+│   ├── training
+│   └── utils
+├── res
+│   └── MUTAG
+│       └── GIN
+│           └── raw
+├── tests
+└── venv
+```
+
 ## Installation
 
 #### Prerequisites
@@ -13,8 +34,9 @@ This repository contains the implementation of GNN-GED framework to perform grap
 python3.10 -m venv venv
 source venv/bin/activate
 
-# Install required packages
-pip3 install -r requirements.txt
+# Check your CUDA configuration and install required packages
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+pip3 install torch_geometric
 
 # Install the Python package
 python3 -m pip install -e .
@@ -34,4 +56,9 @@ python3 gnn_ged/training/train_model.py --dataset_dir data/TUDataset --dataset_n
 #### Compute GED
 ```bash
 python3 main.py --dataset_dir data/TUDataset/ --dataset_name MUTAG --output_dir res/MUTAG/GIN/raw/
+```
+
+#### Classify graphs
+```bash
+python3 gnn_ged/evaluation/graph_classification.py --distance_matrix res/MUTAG/GIN/raw/all_distances.npy --indices_dir res/MUTAG/ --dataset_dir data/TUDataset/ --dataset_name MUTAG --output_dir .
 ```
