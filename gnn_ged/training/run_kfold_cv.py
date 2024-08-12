@@ -9,6 +9,7 @@ import numpy as np
 from sklearn.model_selection import StratifiedKFold
 from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
+from torch_geometric.transforms import NormalizeFeatures
 
 
 def reset_weights(m):
@@ -120,6 +121,7 @@ def get_args_parser():
     parser.add_argument('--n_layers', type=int, default=3, help='Number of convolution layers')
     parser.add_argument('--epochs', type=int, default=201, help='Number of epochs')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
+    parser.add_argument('--use_attrs', action='store_true', help='Use node attributes')
     parser.add_argument('--indices_dir', type=str, help='Path to indices')
     parser.add_argument('--output_dir', type=str, help='Path to output directory')
     return parser
@@ -135,7 +137,10 @@ def main(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Load the dataset from TUDataset
-    dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
+    if args.use_attrs:
+        dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name, use_node_attr=True, transform=NormalizeFeatures())
+    else:
+        dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
     
     dataset_idx = np.arange(0, len(dataset))
     np.random.shuffle(dataset_idx)

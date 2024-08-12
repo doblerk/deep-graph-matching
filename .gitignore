@@ -8,6 +8,7 @@ data/TUDataset/ENZYMES/processed/
 data/TUDataset/MUTAG/processed/
 data/TUDataset/NCI1/processed/
 data/TUDataset/OHSU/processed/
+data/TUDataset/PROTEINS_full/processed/
  
 # Scripts
 gnn_ged/quick_testing.py
