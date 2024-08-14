@@ -20,7 +20,7 @@ def main(args):
     dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
     
     # Shuffle the indices
-    dataset_idx = np.arange(0, len(dataset))
+    dataset_idx = np.arange(0, len(dataset), dtype=np.int32)
     np.random.shuffle(dataset_idx)
 
     # Split the dataset as 80-20 train and test
