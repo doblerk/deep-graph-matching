@@ -15,7 +15,6 @@ def get_args_parser():
     parser.add_argument('--indices_dir', type=str, help='Path to indices')
     parser.add_argument('--dataset_dir', type=str, help='Path to dataset directory')
     parser.add_argument('--dataset_name', type=str, help='Dataset name')
-    parser.add_argument('--output_dir', type=str, help='Path to output directory')
     parser.add_argument('--average', type=str, default='binary', help='Multiclass target')
     return parser
 
