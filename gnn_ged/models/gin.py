@@ -95,4 +95,4 @@ class Model(torch.nn.Module):
         z = self.dense_layers(h)
         z = F.log_softmax(z, dim=1)
 
-        return node_embeddings[-1], z
+        return node_embeddings[-1], graph_pooled[-1], z
