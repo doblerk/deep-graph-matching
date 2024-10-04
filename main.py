@@ -44,6 +44,8 @@ def calc_matrix_distances(args):
     n_train_graphs, n_test_graphs = len(train_embeddings), len(test_embeddings)
 
     matrix_distances = np.zeros(shape=(n_train_graphs + n_test_graphs, n_train_graphs + n_test_graphs), dtype=np.int32)
+    
+    t0 = time()
 
     for i in range(0, matrix_distances.shape[0]):
 
@@ -64,7 +66,7 @@ def calc_matrix_distances(args):
                 target_embedding = embeddings[i] #np.load(files[i])
                 source_graph = g2_nx
                 target_graph = g1_nx
-            
+
             node_assignment = NodeAssignment(source_embedding, target_embedding)
 
             embedding_distances = node_assignment.compute_embedding_distances()
@@ -79,6 +81,10 @@ def calc_matrix_distances(args):
             matrix_distances[i,j] = node_cost + edge_cost
     
     matrix_distances += matrix_distances.T
+
+    t1 = time()
+    computation_time = t1 - t0
+    print('Computation time: ', computation_time)
     
     np.save(os.path.join(args.output_dir, f'all_distances.npy'), matrix_distances)
 
