@@ -2,13 +2,7 @@
 venv/
 
 # Data
-data/TUDataset/AIDS/processed/
-data/TUDataset/DD/processed/
-data/TUDataset/ENZYMES/processed/
-data/TUDataset/MUTAG/processed/
-data/TUDataset/NCI1/processed/
-data/TUDataset/OHSU/processed/
-data/TUDataset/PROTEINS_full/processed/
+data/TUDataset/*
  
 # Scripts
 gnn_ged/quick_testing.py
