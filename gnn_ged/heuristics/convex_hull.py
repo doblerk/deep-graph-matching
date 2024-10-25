@@ -113,31 +113,33 @@ def main(args):
     # should we do it offline or should we choose a smaller hidden dimension with GNNs?
     # done in the first step
 
-    points = np.random.rand(12, 2)
-    t0 = time()
-    for i in range(188):
-        ConvexHull(points)
-    t1 = time()
-    print(t1-t0)
+    # points = np.random.rand(12, 2)
+    # t0 = time()
+    # for i in range(188):
+    #     ConvexHull(points)
+    # t1 = time()
+    # print(t1-t0)
 
     # 2. compute convex hulls for each graph
     # distances are float... should they be int or scaled?
-    # convex_hulls = dict.fromkeys(range(len(dataset_nx)), list()) # centroids
-    # convex_hulls = dict.fromkeys(range(len(dataset_nx)), 0) # volumes
-    # convex_hulls = dict.fromkeys(embeddings.keys(), list()) for enzymes 
+    convex_hulls = dict.fromkeys(range(len(dataset_nx)), list()) # centroids
+    convex_hulls = dict.fromkeys(range(len(dataset_nx)), 0) # volumes
+    convex_hulls = dict.fromkeys(embeddings.keys(), list()) # for enzymes 
     
-    # t0 = time()
-    # for k, v in convex_hulls.items():
-    #     # convex_hulls[k] = ConvexHullChild(embeddings[k]).centroids
-    #     convex_hulls[k] = ConvexHullChild(embeddings[k]).volume
+    t0 = time()
+    for k, v in convex_hulls.items():
+        # convex_hulls[k] = ConvexHullChild(embeddings[k]).centroids
+        convex_hulls[k] = ConvexHullChild(embeddings[k]).volume
 
-    # # convex_hulls_stacked = np.vstack(list(convex_hulls.values())) # centroids
-    # # matrix_distances = squareform(pdist(convex_hulls_stacked)) # centroids
-    # matrix_distances = squareform(pdist([[v] for v in list(convex_hulls.values())], metric='euclidean')) # volumes
-    # t1 = time()
-    # print(t1-t0)
+    # convex_hulls_stacked = np.vstack(list(convex_hulls.values())) # centroids
+    # matrix_distances = squareform(pdist(convex_hulls_stacked)) # centroids
+    matrix_distances = squareform(pdist([[v] for v in list(convex_hulls.values())], metric='euclidean')) # volumes
+    t1 = time()
+    print(t1-t0)
     
     # np.save(os.path.join(args.output_dir, 'heuristic/distances_volumes.npy'), matrix_distances)
+    print([[v] for v in list(convex_hulls.values())])
+    print(len([[v] for v in list(convex_hulls.values())]))
 
 
 if __name__ == '__main__':
