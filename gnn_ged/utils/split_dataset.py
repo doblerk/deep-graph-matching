@@ -1,4 +1,5 @@
 import os
+import json
 import argparse
 
 import numpy as np
@@ -20,15 +21,19 @@ def main(args):
     dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
     
     # Shuffle the indices
-    dataset_idx = np.arange(0, len(dataset), dtype=np.int32)
+    dataset_idx = list(range(len(dataset)))
     np.random.shuffle(dataset_idx)
 
     # Split the dataset as 80-20 train and test
-    train_idx, test_idx = dataset_idx[:int(len(dataset)*0.8)], dataset_idx[int(len(dataset)*0.8):]
+    train_idx = sorted(dataset_idx[:int(len(dataset)*0.8)])
+    test_idx = sorted(dataset_idx[int(len(dataset)*0.8):])
     
     # Save the indices
-    np.save(os.path.join(args.output_dir, 'train_indices.npy'), train_idx)
-    np.save(os.path.join(args.output_dir, 'test_indices.npy'), test_idx)
+    with open(os.path.join(args.output_dir, 'train_indices.json'), 'w') as fp:
+        json.dump(train_idx, fp)
+    
+    with open(os.path.join(args.output_dir, 'test_indices.json'), 'w') as fp:
+        json.dump(test_idx, fp)
 
 
 if __name__ == '__main__':

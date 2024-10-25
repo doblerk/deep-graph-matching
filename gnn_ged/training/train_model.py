@@ -1,11 +1,11 @@
 import os
+import h5py
 import json
 import argparse
 import datetime
 import importlib
 
 import torch
-import pickle
 import numpy as np
 
 from time import time
@@ -42,38 +42,24 @@ def test(test_loader, device, model, criterion):
 
 
 @torch.no_grad()
-def extract_embeddings(train_dataset, train_idx, test_dataset, test_idx, device, model, args):
-    '''Extracts the node embeddings of the final layer and returns a dictionnary with key-value pair as graph idx: embedding'''
-    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=False)
-    train_dic = {}
+def extract_embeddings(dataset, device, model, args):
+    '''Extracts the node embeddings of the final layer and stores them in HDF'''
+    data_loader = DataLoader(dataset, batch_size=1, shuffle=False)
+    embeddings = list()
     model.eval()
-    for i, data in enumerate(train_loader, start=0):
+    for i, data in enumerate(data_loader, start=0):
         data = data.to(device)
         h, _ = model(data.x, data.edge_index, data.batch)
-        train_dic[train_idx[i]] = h.detach().cpu().numpy()
-        np.save(os.path.join(args.output_dir, f'embeddings/embedding_{train_idx[i]}.npy'), h.detach().cpu().numpy())
+        embeddings.append(h.detach().cpu().numpy())
     
-    with open(os.path.join(args.output_dir, 'train_embeddings.pkl'), 'wb') as fp:
-        pickle.dump(train_dic, fp)
-
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
-    test_dic = {}
-    model.eval()
-    for i, data in enumerate(test_loader, start=0):
-        data = data.to(device)
-        h, _ = model(data.x, data.edge_index, data.batch)
-        test_dic[test_idx[i]] = h.detach().cpu().numpy()
-        np.save(os.path.join(args.output_dir, f'embeddings/embedding_{test_idx[i]}.npy'), h.detach().cpu().numpy())
-
-    with open(os.path.join(args.output_dir, 'test_embeddings.pkl'), 'wb') as fp:
-        pickle.dump(test_dic, fp)
+    with h5py.File(os.path.join(args.output_dir, 'node_embeddings.h5'), 'w') as f:
+        for i, mbddg in enumerate(embeddings, start=0):
+            f.create_dataset(f'embedding_{i}', data=mbddg)
 
 
 def train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, args):
     '''Trains the model, reports the accuracy and loss, and saves the last ckpt'''
     t0 = time()
-    best_loss = np.inf
-    patience_counter = 0
 
     for epoch in range(args.epochs):
 
@@ -84,22 +70,12 @@ def train_model(train_loader, test_loader, device, optimizer, model, criterion, 
 
         scheduler.step()
 
-        if epoch % 1 == 0:
+        if epoch % 25 == 0:
             print(f'Epoch {epoch:<3} | Train Loss: {train_loss:.5f} | Train Acc: {train_accuracy*100:.2f} | Test Loss: {test_loss:.5f} | Test Acc: {test_accuracy*100:.2f}')
-        
-        # if test_loss < best_loss:
-        #     best_loss = test_loss
-        #     patience_counter = 0
-        # else:
-        #     patience_counter += 1
         
         log_stats = {'Epoch': epoch, 'Train loss': train_loss.item(), 'Train accuracy': train_accuracy, 'Test loss': test_loss.item(), 'Test accuracy': test_accuracy}
         with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
             f.write(json.dumps(log_stats) + '\n')
-        
-        # if patience_counter >= args.patience:
-        #     print(f'Early stopping at epoch {epoch}')
-        #     break
     
     t1 = time()
     computation_time = str(datetime.timedelta(seconds=int(t1 - t0)))
@@ -124,7 +100,6 @@ def get_args_parser():
     parser.add_argument('--n_layers', type=int, default=3, help='Number of convolution layers')
     parser.add_argument('--epochs', type=int, default=201, help='Number of epochs')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
-    parser.add_argument('--patience', type=int, default=20, help='Early stopping patience')
     parser.add_argument('--use_attrs', action='store_true', help='Use node attributes')
     parser.add_argument('--indices_dir', type=str, help='Path to indices')
     parser.add_argument('--output_dir', type=str, help='Path to output directory')
@@ -147,12 +122,16 @@ def main(args):
     else:
         dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
     
-    train_idx = np.load(os.path.join(args.indices_dir, 'train_indices.npy'))
-    test_idx = np.load(os.path.join(args.indices_dir, 'test_indices.npy'))
+    # Load the train and test indices
+    with open(os.path.join(args.indices_dir, 'train_indices.json'), 'r') as fp:
+        train_idx = json.load(fp)
+    
+    with open(os.path.join(args.indices_dir, 'test_indices.json'), 'r') as fp:
+        test_idx = json.load(fp)
 
+    # Prepare the data
     train_dataset, test_dataset = dataset[train_idx], dataset[test_idx]
     
-    # Prepare the data
     train_loader = DataLoader(
             dataset=train_dataset,
             batch_size=args.batch_size,
