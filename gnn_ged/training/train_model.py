@@ -31,13 +31,25 @@ def train(train_loader, device, optimizer, model, criterion):
 def test(test_loader, device, model, criterion):
     '''Evaluates the model and returns the accuracy and loss'''
     model.eval()
-    acc = 0
-    loss = 0
+    total_correct = 0
+    total_loss = 0
+    total_samples = 0
+
     for data in test_loader:
         data = data.to(device)
         _, z = model(data.x, data.edge_index, data.batch)
-        acc += int((z.argmax(dim=1) == data.y).sum()) / len(test_loader.dataset)
-        loss += criterion(z, data.y) * len(data) / len(test_loader.dataset)
+
+        loss = criterion(z, data.y)
+        total_loss += loss.item() * data.y.size(0)
+
+        preds = z.argmax(dim=1)
+        total_correct += (preds == data.y).sum().item()
+
+        total_samples += data.y.size(0)
+    
+    acc = total_correct / total_samples
+    loss = total_loss / total_samples
+
     return acc, loss
 
 
@@ -73,7 +85,7 @@ def train_model(train_loader, test_loader, device, optimizer, model, criterion, 
         if epoch % 25 == 0:
             print(f'Epoch {epoch:<3} | Train Loss: {train_loss:.5f} | Train Acc: {train_accuracy*100:.2f} | Test Loss: {test_loss:.5f} | Test Acc: {test_accuracy*100:.2f}')
         
-        log_stats = {'Epoch': epoch, 'Train loss': train_loss.item(), 'Train accuracy': train_accuracy, 'Test loss': test_loss.item(), 'Test accuracy': test_accuracy}
+        log_stats = {'Epoch': epoch, 'Train loss': train_loss, 'Train accuracy': train_accuracy, 'Test loss': test_loss, 'Test accuracy': test_accuracy}
         with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
             f.write(json.dumps(log_stats) + '\n')
     
@@ -162,7 +174,7 @@ def main(args):
     train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, args)
     
     # Extract the embeddings
-    extract_embeddings(train_dataset, train_idx, test_dataset, test_idx, device, model, args)
+    extract_embeddings(dataset, device, model, args)
 
 
 if __name__ == '__main__':

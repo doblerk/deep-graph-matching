@@ -1,4 +1,5 @@
 import os
+import json
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,13 +7,29 @@ import matplotlib.pyplot as plt
 
 def plot(args):
 
+    with open(os.path.join(args.indices_dir, 'train_indices.json'), 'r') as fp:
+        train_idx = json.load(fp)
+    
+    with open(os.path.join(args.indices_dir, 'test_indices.json'), 'r') as fp:
+        test_idx = json.load(fp)
+
     # Load and flatten the matrix distances
-    pred_distances_flatten = np.load(args.distance_matrix_pred).flatten(order='C')
-    true_distances_flatten = np.load(args.distance_matrix_true).flatten(order='C')
+    pred_distances = np.load(args.distance_matrix_pred)
+    true_distances = np.load(args.distance_matrix_true)
+    
+    # Process the matrices to get subsamples
+    test_pred_distance_matrix = pred_distances[test_idx, :]
+    test_pred_distance_matrix = test_pred_distance_matrix[:, train_idx]
+    test_pred_distance_matrix = test_pred_distance_matrix.flatten(order='C')
+
+    test_true_distance_matrix = true_distances[test_idx, :]
+    test_true_distance_matrix = test_true_distance_matrix[:, train_idx]
+    test_true_distance_matrix = test_true_distance_matrix.flatten(order='C')
+
 
     # Normalize the values
-    pred_distances_normalized = ((pred_distances_flatten - np.min(pred_distances_flatten)) / (np.max(pred_distances_flatten) - np.min(pred_distances_flatten))).squeeze()
-    true_distances_normalized = ((true_distances_flatten - np.min(true_distances_flatten)) / (np.max(true_distances_flatten) - np.min(true_distances_flatten))).squeeze()
+    pred_distances_normalized = ((test_pred_distance_matrix - np.min(test_pred_distance_matrix)) / (np.max(test_pred_distance_matrix) - np.min(test_pred_distance_matrix))).squeeze()
+    true_distances_normalized = ((test_true_distance_matrix - np.min(test_true_distance_matrix)) / (np.max(test_true_distance_matrix) - np.min(test_true_distance_matrix))).squeeze()
     
     # Plot Pred vs True distances
     fig, ax = plt.subplots(figsize=(8,8))
@@ -29,6 +46,7 @@ def get_args_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--distance_matrix_pred', type=str, help='Path to predicted distance matrix')
     parser.add_argument('--distance_matrix_true', type=str, help='Path to BP-GED distance matrix')
+    parser.add_argument('--indices_dir', type=str, help='Path to indices')
     parser.add_argument('--output_dir', type=str, help='Path to output directory')
     return parser
 
