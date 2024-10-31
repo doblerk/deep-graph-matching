@@ -32,34 +32,33 @@ def train(train_loader, device, optimizer, model, criterion):
 
 
 @torch.no_grad()
-def test(test_loader, device, model, criterion, loader_size):
+def test(test_loader, device, model, criterion):
     '''Evaluates the model and returns the accuracy and loss'''
     model.eval()
-    acc = 0
-    loss = 0
+    total_correct = 0
+    total_loss = 0
+    total_samples = 0
+    
     for data in test_loader:
         data = data.to(device)
         _, z = model(data.x, data.edge_index, data.batch)
-        acc += int((z.argmax(dim=1) == data.y).sum()) / loader_size
-        loss += criterion(z, data.y) / loader_size
+        
+        loss = criterion(z, data.y)
+        total_loss += loss.item() * data.y.size(0)
+
+        preds = z.argmax(dim=1)
+        total_correct += (preds == data.y).sum().item()
+        
+        total_samples = data.y.size(0)
+
+    acc = total_correct / total_samples
+    loss = total_loss / total_samples
+    
     return acc, loss
 
 
 def perform_kfold_cv(dataset, train_dataset, train_labels, device, args):
     '''Performs k-fold cross validation'''
-
-    # Initialize the model
-    model_module = importlib.import_module(f'gnn_ged.models.{args.arch}')
-    model = model_module.Model(
-            input_dim=dataset.num_features,
-            hidden_dim=args.hidden_dim,
-            n_classes=dataset.num_classes,
-            n_layers=args.n_layers,
-    ).to(device)
-
-    # Define the optimier and criterion
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.0001)
-    criterion = torch.nn.CrossEntropyLoss()
 
     # Perform K-fold cross validation
     k_fold = 10
@@ -85,15 +84,28 @@ def perform_kfold_cv(dataset, train_dataset, train_labels, device, args):
             sampler=torch.utils.data.SubsetRandomSampler(val_idx),
         )
 
+        # Initialize the model
+        model_module = importlib.import_module(f'gnn_ged.models.{args.arch}')
+        model = model_module.Model(
+                input_dim=dataset.num_features,
+                hidden_dim=args.hidden_dim,
+                n_classes=dataset.num_classes,
+                n_layers=args.n_layers,
+        ).to(device)
+
+        # Define the optimizer and criterion
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.0001)
+        criterion = torch.nn.CrossEntropyLoss()
+
         # Reset the weights
-        model.apply(reset_weights)
+        # model.apply(reset_weights)
 
         # Train the model on the train set
         for epoch in range(args.epochs):
             train(train_loader, device, optimizer, model, criterion)
 
         # Evaluate the model on the test set
-        val_accuracy, val_loss = test(val_loader, device, model, criterion, len(val_idx))
+        val_accuracy, val_loss = test(val_loader, device, model, criterion)
         val_accuracies.append(val_accuracy)
         val_losses.append(val_loss)
 
@@ -141,11 +153,9 @@ def main(args):
         dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name, use_node_attr=True, transform=NormalizeFeatures())
     else:
         dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
-    
-    dataset_idx = np.arange(0, len(dataset))
-    np.random.shuffle(dataset_idx)
 
-    train_idx = np.load(os.path.join(args.indices_dir, 'train_indices.npy'))
+    with open(os.path.join(args.indices_dir, 'train_indices.json'), 'r') as fp:
+        train_idx = json.load(fp)
 
     train_labels = [dataset[i].y.item() for i in train_idx]
 

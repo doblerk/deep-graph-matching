@@ -86,6 +86,5 @@ class Model(torch.nn.Module):
         
         # CLassify
         z = self.dense_layers(x)
-        z = F.log_softmax(z, dim=1)
 
         return node_embeddings[-1], z
