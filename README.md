@@ -8,6 +8,7 @@ This repository contains the implementation of GNN-GED framework to perform grap
 │   └── TUDataset
 │       └── MUTAG
 │           └── raw
+|
 ├── gnn_ged
 │   ├── assignment
 │   ├── edit_cost
@@ -15,10 +16,15 @@ This repository contains the implementation of GNN-GED framework to perform grap
 │   ├── models
 │   ├── training
 │   └── utils
+|
+├── src
+│   └── build
+│ 
 ├── res
 │   └── MUTAG
 │       └── GIN
 │           └── raw
+|
 ├── tests
 └── venv
 ```

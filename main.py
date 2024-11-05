@@ -4,7 +4,8 @@ import argparse
 import numpy as np
 
 from time import time
-from pathlib import Path
+from itertools import combinations
+
 from torch_geometric.utils import to_networkx 
 from torch_geometric.datasets import TUDataset
 
@@ -36,39 +37,36 @@ def calc_matrix_distances(args):
     
     t0 = time()
 
-    for i in range(0, matrix_distances.shape[0]):
+    for i, j in combinations(list(range(len(dataset_nx))), r=2):
 
         g1_nx = dataset_nx[i]
+        g2_nx = dataset_nx[j]
 
-        for j in range(i + 1, matrix_distances.shape[1]):
+        if g1_nx.number_of_nodes() <= g2_nx.number_of_nodes():
+            # heuristic -> the smaller graph is always the source graph
+            source_embedding = node_embeddings[i]
+            target_embedding = node_embeddings[j]
+            source_graph = g1_nx
+            target_graph = g2_nx
+        else:
+            source_embedding = node_embeddings[j]
+            target_embedding = node_embeddings[i]
+            source_graph = g2_nx
+            target_graph = g1_nx
 
-            g2_nx = dataset_nx[j]
+        node_assignment = NodeAssignment(source_embedding, target_embedding)
 
-            if g1_nx.number_of_nodes() <= g2_nx.number_of_nodes():
-                # heuristic -> the smaller graph is always the source graph
-                source_embedding = node_embeddings[i]
-                target_embedding = node_embeddings[j]
-                source_graph = g1_nx
-                target_graph = g2_nx
-            else:
-                source_embedding = node_embeddings[j]
-                target_embedding = node_embeddings[i]
-                source_graph = g2_nx
-                target_graph = g1_nx
+        embedding_distances = node_assignment.compute_embedding_distances()
 
-            node_assignment = NodeAssignment(source_embedding, target_embedding)
+        assignment = node_assignment.compute_node_assignment(embedding_distances)
 
-            embedding_distances = node_assignment.compute_embedding_distances()
+        edit_cost = EditCost(assignment, source_graph, target_graph)
 
-            assignment = node_assignment.compute_node_assignment(embedding_distances)
+        node_cost = edit_cost.compute_cost_node_edit()
+        edge_cost = edit_cost.compute_cost_edge_edit()
+        
+        matrix_distances[i,j] = node_cost + edge_cost
 
-            edit_cost = EditCost(assignment, source_graph, target_graph)
-
-            node_cost = edit_cost.compute_cost_node_edit()
-            edge_cost = edit_cost.compute_cost_edge_edit()
-            
-            matrix_distances[i,j] = node_cost + edge_cost
-    
     matrix_distances += matrix_distances.T
 
     t1 = time()
@@ -91,10 +89,10 @@ def get_args_parser():
 
 def main(args):
     """
-    Computes all pairwise distances between every pair of graphs to yield a dissimalirty matrix.
+    Computes all pairwise distances between every pair of graphs to yield a dissimilarity matrix.
 
     Args:
-        args: command-line arguments (path to dataset directory, dataset name, and path to output directory).
+        args: command-line arguments (path to dataset directory, dataset name, path to node embeddings, and path to output directory).
     """
     calc_matrix_distances(args)
 
