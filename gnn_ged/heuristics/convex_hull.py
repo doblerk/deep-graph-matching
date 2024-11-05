@@ -1,16 +1,17 @@
 import os
-import pickle
+import h5py
 import argparse
 
 import numpy as np
 
 from time import time
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import normalize
 from torch_geometric.utils import to_networkx 
 from torch_geometric.datasets import TUDataset
 
 from scipy.spatial import ConvexHull
-from scipy.spatial.distance import cdist, pdist, squareform
+from scipy.spatial.distance import euclidean, cdist, pdist, squareform
 
 
 # https://stackoverflow.com/questions/26408110/why-does-qhull-error-when-computing-convex-hull-of-a-few-points
@@ -19,127 +20,143 @@ from scipy.spatial.distance import cdist, pdist, squareform
 # The expected number of vertices in the convex hull is O(n^(m−1/m+1)) for n→∞. It was proved in 1970 by H. Raynaud in "Sur l’enveloppe convex des nuages de points aleatoires dans Rn".
 
 
-def load_dataset(args):
-    dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
-    dataset_nx = [to_networkx(dataset[i], node_attrs='x', to_undirected=True) for i in range(len(dataset))]
-    return dataset_nx
+def load_embeddings(args, dataset_size):
+    """Loads the train and test embeddings"""
+    with h5py.File(args.node_embeddings, 'r') as f:
+        node_embeddings = [np.array(f[f'embedding_{i}']) for i in range(dataset_size)]
+    return node_embeddings
 
 
-def load_embeddings(args):
-    with open(os.path.join(args.output_dir, 'train_embeddings.pkl'), 'rb') as fp:
-        train_embeddings = pickle.load(fp)
+def reduce_embedding_dimensionality(embeddings, n_components=2):
+    """Reduces the dimensionality of each node embedding"""
+    reduced_embeddings = []
+    for i in range(len(embeddings)):
+        model = PCA(n_components=n_components).fit(embeddings[i])
+        reduced_embeddings.append(model.transform(embeddings[i]))
+    return reduced_embeddings
+
+def calc_matrix_distances(args):
+
+    dataset = dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
+
+    embeddings = load_embeddings(args, len(dataset))
+
+    reduced_embeddings = reduce_embedding_dimensionality(embeddings)
+
+    """
+        -> [Cx, Cy, P, V, S, D, Rsh, Rsp]
+    """
+
+    convex_hulls = dict.fromkeys(range(len(embeddings)), list()) # centroids
+    # convex_hulls = dict.fromkeys(range(len(embeddings)), 0) # volumes or perimeters
+
+    t0 = time()
+
+    for k, _ in convex_hulls.items():
+
+        # convex_hulls[k] = ConvexHullChild(reduced_embeddings[k]).calc_centroid()
+        # convex_hulls[k] = ConvexHullChild(reduced_embeddings[k]).calc_perimeter
+        # convex_hulls[k] = ConvexHullChild(reduced_embeddings[k]).calc_volume
+        # ConvexHullChild(reduced_embeddings[i]).calc_diameter()
+        convex_hulls[k] = ConvexHullChild(reduced_embeddings[k]).calc_all_feats()
+
+
+    convex_hulls_stacked = np.vstack(list(convex_hulls.values()))
+    convex_hulls_stacked_normalized = normalize(convex_hulls_stacked, axis=0, norm='max')
+    matrix_distances = squareform(pdist(convex_hulls_stacked_normalized, metric='cosine'))
     
-    with open(os.path.join(args.output_dir, 'test_embeddings.pkl'), 'rb') as fp:
-        test_embeddings = pickle.load(fp)
+    # matrix_distances = squareform(pdist(convex_hulls_stacked, metric='euclidean'))
+
+    # matrix_distances = squareform(pdist([[v] for v in list(convex_hulls.values())], metric='euclidean')) # volumes
+
+    t1 = time()
+    computation_time = t1 - t0
+
+    print(computation_time)
+
+    # with open(os.path.join(args.output_dir, 'computation_time.txt'), 'a') as file:
+    #     file.write(str(computation_time) + '\n')
     
-    return train_embeddings, test_embeddings
+    # np.save(os.path.join(args.output_dir, f'distances.npy'), matrix_distances)
 
 
-def reduce_dimensionality(embeddings, n_components=2):
-    model = PCA(n_components=n_components).fit(embeddings)
-    return model.transform(embeddings)
+    
 
 
-# add child class for implementing something additional like centroids
+
+
+
+
 class ConvexHullChild(ConvexHull):
 
     def __init__(self, points):
         ConvexHull.__init__(self, points, qhull_options='QJ')
-        self.centroids = self.calc_centroids()
 
-    def calc_centroids(self):
-        c = []
-        for i in range(self.points.shape[1]):
-            c.append(np.mean(self.points[self.vertices,i]))
-        return c
+    def calc_centroid(self):
+        centroid = [np.mean(self.points[self.vertices, i]) for i in range(self.points.shape[1])]
+        return centroid
+
+    def calc_perimeter(self):
+        vertices = self.vertices.tolist() + [self.vertices[0]] # close the loop by adding the first vertex
+        perimeter = sum(euclidean(x, y) for x, y in zip(self.points[vertices], self.points[vertices[1:]]))
+        return perimeter
+    
+    def calc_volume(self):
+        return self.volume
+    
+    def calc_relative_shape(self):
+        return self.calc_perimeter() / self.calc_volume()
+    
+    def calc_hull_size(self):
+        return len(self.vertices)
+
+    def calc_diameter(self):
+        diameter = np.max(pdist(self.points[self.vertices], metric='euclidean'))
+        return diameter
+
+    def calc_relative_spatial(self):
+        return self.calc_diameter() / self.calc_volume()
+
+    def calc_mom_inertia():
+        # distribution of points around centroid
+        # up to 2nd moment to capture covariance
+        pass
+    
+    def calc_tunring_functions(self):
+        # TODO
+        pass
+
+    def calc_all_feats(self):
+        centroids = self.calc_centroid()
+        area = self.calc_volume()
+        perimeter = self.calc_perimeter()
+        hull_size = self.calc_hull_size()
+        diameter = self.calc_diameter()
+        rel_shape = perimeter / area
+        rel_spatial = diameter / area
+        return [*centroids, area, perimeter, hull_size, diameter, rel_shape, rel_spatial]
+
+
+
 
 
 def get_args_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset_dir', type=str, help='Path to dataset')
     parser.add_argument('--dataset_name', type=str, help='Dataset name')
+    parser.add_argument('--node_embeddings', type=str, help='Path to node embeddings file')
     parser.add_argument('--output_dir', type=str, help='Path to output directory')
     return parser
 
 
 def main(args):
-    
-    dataset_nx = load_dataset(args)
-
-    train_embeddings, test_embeddings = load_embeddings(args)
-   
-    embeddings = dict()
-    for i in range(len(dataset_nx)):
-        if i in train_embeddings:
-            # if train_embeddings[i].shape[0] >= 10:
-            embeddings[i] = reduce_dimensionality(train_embeddings[i], n_components=2)
-        else:
-            # if test_embeddings[i].shape[0] >= 10:
-            embeddings[i] = reduce_dimensionality(test_embeddings[i], n_components=2)
-
-    
-
-    # what takes quite some time is the linear projection using PCA. We could bypass this by either doing it offline as a preprocessing step or by outputting smaller dimensions with the GNNs
-    # with GNNs I cannot produce n_dim specific for each graph, but I can choose n_dim based on the smaller graph?
-
-    # g1 = train_embeddings[139]
-    # g2 = train_embeddings[133]
-
-    # proj_points1 = reduce_dimensionality(g1, n_components=2)
-    # convex_hull1 = ConvexHullChild(proj_points1, qhull_options='QJ')
-
-    # proj_points2 = reduce_dimensionality(g2, n_components=2)
-    # convex_hull2 = ConvexHullChild(proj_points2, qhull_options='QJ')
-    
-    # case 1: using the volume
-    # vol1 = convex_hull1.volume
-    # vol2 = convex_hull2.volume
-    # then compare these volums using different dissimilarity functions
-
-    # case 2: using the centroid
-    # c1 = convex_hull1.centroid()
-    # c2 = convex_hull2.centroid()
-    # then compare these distances using euclidean distance
-
     """
-        TODO:
-                - Compute convex hulls for each graph and associated values like volumes, centroids etc.
-                - Compare these values between graphs to define the dissimilarity.
-                - Record runtimes and accuracies.
-                - Then, think of alternative ways to compare these hulls
+    Computes all pairwise distance between each pair of graph node embeddings to yield a dissimilarity matrix.
+
+    Args:
+        args: commandline arguments (path to dataset directory, dataset name, path to node embeddings, path to output directory)
     """
-
-    # 1. reduce the dimensionality of each node embedding
-    # should we do it offline or should we choose a smaller hidden dimension with GNNs?
-    # done in the first step
-
-    # points = np.random.rand(12, 2)
-    # t0 = time()
-    # for i in range(188):
-    #     ConvexHull(points)
-    # t1 = time()
-    # print(t1-t0)
-
-    # 2. compute convex hulls for each graph
-    # distances are float... should they be int or scaled?
-    convex_hulls = dict.fromkeys(range(len(dataset_nx)), list()) # centroids
-    convex_hulls = dict.fromkeys(range(len(dataset_nx)), 0) # volumes
-    convex_hulls = dict.fromkeys(embeddings.keys(), list()) # for enzymes 
-    
-    t0 = time()
-    for k, v in convex_hulls.items():
-        # convex_hulls[k] = ConvexHullChild(embeddings[k]).centroids
-        convex_hulls[k] = ConvexHullChild(embeddings[k]).volume
-
-    # convex_hulls_stacked = np.vstack(list(convex_hulls.values())) # centroids
-    # matrix_distances = squareform(pdist(convex_hulls_stacked)) # centroids
-    matrix_distances = squareform(pdist([[v] for v in list(convex_hulls.values())], metric='euclidean')) # volumes
-    t1 = time()
-    print(t1-t0)
-    
-    # np.save(os.path.join(args.output_dir, 'heuristic/distances_volumes.npy'), matrix_distances)
-    print([[v] for v in list(convex_hulls.values())])
-    print(len([[v] for v in list(convex_hulls.values())]))
+    calc_matrix_distances(args)
 
 
 if __name__ == '__main__':
