@@ -6,6 +6,7 @@ import importlib
 
 import numpy as np
 
+from torch.optim.lr_scheduler import StepLR
 from sklearn.model_selection import StratifiedKFold
 from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
@@ -96,6 +97,7 @@ def perform_kfold_cv(dataset, train_dataset, train_labels, device, args):
         # Define the optimizer and criterion
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.0001)
         criterion = torch.nn.CrossEntropyLoss()
+        scheduler = StepLR(optimizer, step_size=50, gamma=0.1)
 
         # Reset the weights
         # model.apply(reset_weights)
@@ -109,18 +111,17 @@ def perform_kfold_cv(dataset, train_dataset, train_labels, device, args):
         val_accuracies.append(val_accuracy)
         val_losses.append(val_loss)
 
+        scheduler.step()
+
         # Write logs
         log_stats = {'Fold': fold+1, 'Validation accuracy': val_accuracy}
         with open(os.path.join(args.output_dir, 'log_cv.txt'), 'a') as f:
            f.write(json.dumps(log_stats) + '\n')
 
-        print(f'Val Loss: {val_loss:.4f} | Val Accuracy: {val_accuracy*100:.2f}%\n')
-    
-    print(f'Average val Accuracy: {np.mean(val_accuracies)*100:.2f}%\n')
-
     with open(os.path.join(args.output_dir, 'log_cv.txt'), 'a') as f:
         f.write(json.dumps({'Validation accuracies': val_accuracies}) + '\n')
-        f.write(json.dumps({'Average accuracy': np.mean(val_accuracies)}) + '\n')
+        f.write(json.dumps({'Mean accuracy': np.mean(val_accuracies)}) + '\n')
+        f.write(json.dump({'Std accuracy': np.std(val_accuracies)}) + '\n')
 
 
 def get_args_parser():

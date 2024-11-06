@@ -29,9 +29,14 @@ class GATLayer(torch.nn.Module):
         super().__init__()
         
         self.conv = GATv2Conv(input_dim, hidden_dim, n_heads, dropout, concat)
+
+        out_dim = hidden_dim * n_heads if concat else hidden_dim
+
+        self.proj = Linear(input_dim, out_dim) if input_dim != out_dim else None
     
     def forward(self, x, edge_index):
-        return self.conv(x, edge_index)
+        residual = self.proj(x) if self.proj is not None else x
+        return self.conv(x, edge_index) + residual
 
 
 class Model(torch.nn.Module):

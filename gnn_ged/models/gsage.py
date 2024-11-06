@@ -28,9 +28,12 @@ class GraphSAGELayer(torch.nn.Module):
         super().__init__()
         
         self.conv = SAGEConv(input_dim, hidden_dim, aggr=aggr)
+
+        self.proj = Linear(input_dim, hidden_dim) if input_dim != hidden_dim else None
     
     def forward(self, x, edge_index):
-        return self.conv(x, edge_index)
+        residual = self.proj(x) if self.proj is not None else x
+        return self.conv(x, edge_index) + residual
 
 
 class Model(torch.nn.Module):

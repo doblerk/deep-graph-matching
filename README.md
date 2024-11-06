@@ -8,7 +8,7 @@ This repository contains the implementation of GNN-GED framework to perform grap
 │   └── TUDataset
 │       └── MUTAG
 │           └── raw
-|
+│
 ├── gnn_ged
 │   ├── assignment
 │   ├── edit_cost
@@ -16,7 +16,7 @@ This repository contains the implementation of GNN-GED framework to perform grap
 │   ├── models
 │   ├── training
 │   └── utils
-|
+│
 ├── src
 │   └── build
 │ 
@@ -24,7 +24,7 @@ This repository contains the implementation of GNN-GED framework to perform grap
 │   └── MUTAG
 │       └── GIN
 │           └── raw
-|
+│
 ├── tests
 └── venv
 ```
@@ -68,3 +68,6 @@ python3 main.py --dataset_dir data/TUDataset/ --dataset_name MUTAG --output_dir 
 ```bash
 python3 gnn_ged/evaluation/graph_classification.py --distance_matrix res/MUTAG/GIN/raw/all_distances.npy --indices_dir res/MUTAG/ --dataset_dir data/TUDataset/ --dataset_name MUTAG
 ```
+
+## Further information
+Please refer to [Graph Matching](https://github.com/doblerk/graph-matching.git) for a faster alternative.

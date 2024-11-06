@@ -82,7 +82,7 @@ def train_model(train_loader, test_loader, device, optimizer, model, criterion, 
 
         scheduler.step()
 
-        if epoch % 25 == 0:
+        if epoch % 50 == 0:
             print(f'Epoch {epoch:<3} | Train Loss: {train_loss:.5f} | Train Acc: {train_accuracy*100:.2f} | Test Loss: {test_loss:.5f} | Test Acc: {test_accuracy*100:.2f}')
         
         log_stats = {'Epoch': epoch, 'Train loss': train_loss, 'Train accuracy': train_accuracy, 'Test loss': test_loss, 'Test accuracy': test_accuracy}
@@ -168,7 +168,7 @@ def main(args):
     # Define the optimizer and criterion
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.0001)
     criterion = torch.nn.CrossEntropyLoss()
-    scheduler = StepLR(optimizer, step_size=50, gamma=0.5)
+    scheduler = StepLR(optimizer, step_size=50, gamma=0.1)
 
     # Train the model
     train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, args)
