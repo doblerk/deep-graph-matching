@@ -38,11 +38,8 @@ class GINLayer(torch.nn.Module):
             )
         )
 
-        self.proj = Linear(input_dim, hidden_dim) if input_dim != hidden_dim else None
-
     def forward(self, x, edge_index):
-        residual = self.proj(x) if self.proj is not None else x
-        return self.conv(x, edge_index) + residual
+        return self.conv(x, edge_index)
 
 
 class Model(torch.nn.Module):
@@ -76,13 +73,18 @@ class Model(torch.nn.Module):
             Dropout(p=0.2),
             Linear(hidden_dim * n_layers, n_classes)
         )
+
+        self.input_proj = Linear(input_dim, hidden_dim) if input_dim != hidden_dim else None
     
     def forward(self, x, edge_index, batch):
         
         # Node embeddings
+        x_residual = self.input_proj(x) if self.input_proj is not None else x
         node_embeddings = []
         for layer in self.conv_layers:
             x = layer(x, edge_index)
+            x = x + x_residual
+            x_residual = x
             node_embeddings.append(x)
         
         # Graph-level readout

@@ -29,14 +29,9 @@ class GATLayer(torch.nn.Module):
         super().__init__()
         
         self.conv = GATv2Conv(input_dim, hidden_dim, n_heads, dropout, concat)
-
-        out_dim = hidden_dim * n_heads if concat else hidden_dim
-
-        self.proj = Linear(input_dim, out_dim) if input_dim != out_dim else None
     
     def forward(self, x, edge_index):
-        residual = self.proj(x) if self.proj is not None else x
-        return self.conv(x, edge_index) + residual
+        return self.conv(x, edge_index)
 
 
 class Model(torch.nn.Module):
@@ -56,7 +51,7 @@ class Model(torch.nn.Module):
     n_layers: int
         number of layers
     """
-    def __init__(self, input_dim, hidden_dim, n_classes, n_layers, n_heads=8) -> None:
+    def __init__(self, input_dim, hidden_dim, n_classes, n_layers, n_heads=6) -> None:
         super().__init__()
         
         dropout = 0.5
@@ -76,14 +71,22 @@ class Model(torch.nn.Module):
             Linear(hidden_dim, n_classes)
         )
 
+        self.input_proj = Linear(input_dim, hidden_dim * n_heads) if input_dim != hidden_dim * n_heads else None
+
     def forward(self, x, edge_index, batch):
         # Node embeddings
+        x_residual = self.input_proj(x) if self.input_proj is not None else x
         node_embeddings = []
         for i in range(len(self.conv_layers)):
             x = self.conv_layers[i](x, edge_index)
             x = F.elu(x)
             if i < len(self.conv_layers) - 1:
                 x = F.dropout(x, p=0.2, training=self.training)
+            if x.shape[1] != x_residual.shape[1]:
+                proj_layer = Linear(x_residual.shape[1], x.shape[1], bias=False).to(x.device)
+                x_residual = proj_layer(x_residual)
+            x = x + x_residual
+            x_residual = x
             node_embeddings.append(x)
         
         # Graph-level readout

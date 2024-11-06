@@ -85,21 +85,21 @@ def train_model(train_loader, test_loader, device, optimizer, model, criterion, 
         if epoch % 50 == 0:
             print(f'Epoch {epoch:<3} | Train Loss: {train_loss:.5f} | Train Acc: {train_accuracy*100:.2f} | Test Loss: {test_loss:.5f} | Test Acc: {test_accuracy*100:.2f}')
         
-        log_stats = {'Epoch': epoch, 'Train loss': train_loss, 'Train accuracy': train_accuracy, 'Test loss': test_loss, 'Test accuracy': test_accuracy}
-        with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
-            f.write(json.dumps(log_stats) + '\n')
+        # log_stats = {'Epoch': epoch, 'Train loss': train_loss, 'Train accuracy': train_accuracy, 'Test loss': test_loss, 'Test accuracy': test_accuracy}
+        # with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
+        #     f.write(json.dumps(log_stats) + '\n')
     
     t1 = time()
     computation_time = str(datetime.timedelta(seconds=int(t1 - t0)))
     print(f'Training time {computation_time}')
 
     # Save the model
-    save_dict = {
-        'model_state_dict': model.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'epoch': epoch + 1,
-    }
-    torch.save(save_dict, os.path.join(args.output_dir, 'checkpoint.pth'))
+    # save_dict = {
+    #     'model_state_dict': model.state_dict(),
+    #     'optimizer': optimizer.state_dict(),
+    #     'epoch': epoch + 1,
+    # }
+    # torch.save(save_dict, os.path.join(args.output_dir, 'checkpoint.pth'))
 
 
 def get_args_parser():
@@ -121,9 +121,9 @@ def get_args_parser():
 def main(args):
 
     # Write logs
-    log_args = {k:str(v) for (k,v) in sorted(dict(vars(args)).items())}
-    with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
-        f.write(json.dumps(log_args) + '\n')
+    # log_args = {k:str(v) for (k,v) in sorted(dict(vars(args)).items())}
+    # with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
+    #     f.write(json.dumps(log_args) + '\n')
     
     # Set device to CUDA
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -168,13 +168,13 @@ def main(args):
     # Define the optimizer and criterion
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.0001)
     criterion = torch.nn.CrossEntropyLoss()
-    scheduler = StepLR(optimizer, step_size=50, gamma=0.1)
+    scheduler = StepLR(optimizer, step_size=50, gamma=0.5)
 
     # Train the model
     train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, args)
     
     # Extract the embeddings
-    extract_embeddings(dataset, device, model, args)
+    # extract_embeddings(dataset, device, model, args)
 
 
 if __name__ == '__main__':
