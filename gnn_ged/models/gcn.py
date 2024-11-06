@@ -27,9 +27,12 @@ class GCNLayer(torch.nn.Module):
         super().__init__()
         
         self.conv = GCNConv(input_dim, hidden_dim)
+
+        self.proj = Linear(input_dim, hidden_dim) if input_dim != hidden_dim else None
     
     def forward(self, x, edge_index):
-        return self.conv(x, edge_index)
+        residual = self.proj(x) if self.proj is not None else x
+        return self.conv(x, edge_index) + residual
 
 
 class Model(torch.nn.Module):
