@@ -1,1 +1,0 @@
-/usr/bin/c++ -fPIC -flto -shared  -o greedy_assignment.cpython-310-x86_64-linux-gnu.so CMakeFiles/greedy_assignment.dir/calc_greedy_assignment.cpp.o 

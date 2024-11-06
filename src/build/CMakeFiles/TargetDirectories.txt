@@ -1,3 +1,0 @@
-/home/dobleraemon/Documents/PhD/gnn-ged/src/build/CMakeFiles/greedy_assignment.dir
-/home/dobleraemon/Documents/PhD/gnn-ged/src/build/CMakeFiles/edit_cache.dir
-/home/dobleraemon/Documents/PhD/gnn-ged/src/build/CMakeFiles/rebuild_cache.dir
