@@ -12,7 +12,7 @@ from time import time
 from torch.optim.lr_scheduler import StepLR
 from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
-from torch_geometric.transforms import NormalizeFeatures
+from torch_geometric.transforms import NormalizeFeatures, Constant
 
 
 def train(train_loader, device, optimizer, model, criterion):
@@ -129,10 +129,15 @@ def main(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Load the dataset from TUDataset
-    if args.use_attrs:
-        dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name, use_node_attr=True, transform=NormalizeFeatures())
-    else:
-        dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
+    transform = NormalizeFeatures() if args.use_attrs else None
+    dataset = TUDataset(root=args.dataset_dir,
+                        name=args.dataset_name,
+                        use_node_attr=args.use_attrs,
+                        transform=transform)
+    
+    # Check if the data set contains unlabelled nodes
+    if 'x' not in dataset[0]:
+        dataset.transform = Constant(value=1.0)
     
     # Load the train and test indices
     with open(os.path.join(args.indices_dir, 'train_indices.json'), 'r') as fp:

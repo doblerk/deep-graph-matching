@@ -17,6 +17,7 @@ def get_args_parser():
     parser.add_argument('--dataset_dir', type=str, help='Path to dataset directory')
     parser.add_argument('--dataset_name', type=str, help='Dataset name')
     parser.add_argument('--average', type=str, default='binary', help='Multiclass target')
+    parser.add_argument('--output_dir', type=str, help='Path to output directory')
     return parser
 
 
@@ -24,10 +25,10 @@ def knn_classifier(args):
 
     distance_matrix = np.load(args.distance_matrix)
     
-    with open(os.path.join(args.output_dir, 'train_indices.json'), 'r') as fp:
+    with open(os.path.join(args.indices_dir, 'train_indices.json'), 'r') as fp:
         train_idx = json.load(fp)
     
-    with open(os.path.join(args.output_dir, 'test_indices.json'), 'r') as fp:
+    with open(os.path.join(args.indices_dir, 'test_indices.json'), 'r') as fp:
         test_idx = json.load(fp)
 
     train_distance_matrix = distance_matrix[train_idx,:]
@@ -66,8 +67,6 @@ def knn_classifier(args):
         if mean_score > best_score:
             best_score = mean_score
             best_k = k
-    
-    print(f"The optimal number of K-nearest neighbors is {best_k} with a mean F1 score of {best_score}")
 
     # retrain on the test data with the best k
     knn_test = KNeighborsClassifier(n_neighbors=best_k, metric='precomputed')
@@ -78,7 +77,11 @@ def knn_classifier(args):
 
     f1 = f1_score(test_labels, predictions, average=args.average)
 
-    print(f"F1 Score on new data with K={best_k}: {f1}")
+    # print(f"F1 Score on new data with K={best_k}: {f1}")
+    with open(os.path.join(args.output_dir, 'final_classification_acc.txt'), 'a') as file:
+        file.write(f'The optimal number of K-nearest neighbors is {best_k} with a mean F1 score of {best_score}\n')
+        file.write(f'F1 Score on new data with K={best_k}: {f1}\n')
+
 
 
 def main(args):

@@ -10,7 +10,7 @@ from torch.optim.lr_scheduler import StepLR
 from sklearn.model_selection import StratifiedKFold
 from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
-from torch_geometric.transforms import NormalizeFeatures
+from torch_geometric.transforms import NormalizeFeatures, Constant
 
 
 def reset_weights(m):
@@ -50,7 +50,7 @@ def test(test_loader, device, model, criterion):
         preds = z.argmax(dim=1)
         total_correct += (preds == data.y).sum().item()
         
-        total_samples = data.y.size(0)
+        total_samples += data.y.size(0)
 
     acc = total_correct / total_samples
     loss = total_loss / total_samples
@@ -97,7 +97,7 @@ def perform_kfold_cv(dataset, train_dataset, train_labels, device, args):
         # Define the optimizer and criterion
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.0001)
         criterion = torch.nn.CrossEntropyLoss()
-        scheduler = StepLR(optimizer, step_size=50, gamma=0.1)
+        scheduler = StepLR(optimizer, step_size=50, gamma=0.5)
 
         # Reset the weights
         # model.apply(reset_weights)
@@ -105,13 +105,12 @@ def perform_kfold_cv(dataset, train_dataset, train_labels, device, args):
         # Train the model on the train set
         for epoch in range(args.epochs):
             train(train_loader, device, optimizer, model, criterion)
+            scheduler.step()
 
         # Evaluate the model on the test set
         val_accuracy, val_loss = test(val_loader, device, model, criterion)
         val_accuracies.append(val_accuracy)
         val_losses.append(val_loss)
-
-        scheduler.step()
 
         # Write logs
         log_stats = {'Fold': fold+1, 'Validation accuracy': val_accuracy}
@@ -150,10 +149,15 @@ def main(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Load the dataset from TUDataset
-    if args.use_attrs:
-        dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name, use_node_attr=True, transform=NormalizeFeatures())
-    else:
-        dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
+    transform = NormalizeFeatures() if args.use_attrs else None
+    dataset = TUDataset(root=args.dataset_dir,
+                        name=args.dataset_name,
+                        use_node_attr=args.use_attrs,
+                        transform=transform)
+    
+    # Check if the data set contains unlabelled nodes
+    if 'x' not in dataset[0]:
+        dataset.transform = Constant(value=1.0)
 
     with open(os.path.join(args.indices_dir, 'train_indices.json'), 'r') as fp:
         train_idx = json.load(fp)
