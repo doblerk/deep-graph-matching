@@ -34,10 +34,13 @@ def main(args):
             kernel = GraphKernel(kernel={'name':'weisfeiler_lehman', 'n_iter':5}, normalize=True)
 
     t0 = time()
-    similiarity_matrix = kernel.fit_transform(dataset.data)
-    dissimilarity_matrix = 1.0 - similiarity_matrix
+    similarity_matrix = kernel.fit_transform(dataset.data)
+    dissimilarity_matrix = np.max(similarity_matrix) - similarity_matrix
     t1 = time()
     computation_time = t1 - t0
+
+    dissimilarity_matrix[dissimilarity_matrix < 0.0] = 0.0
+    dissimilarity_matrix[dissimilarity_matrix == 'NaN'] = 1.0
 
     with open(os.path.join(args.output_dir, f'computation_time_kernels.txt'), 'a') as file:
         file.write(f'Computation time for {args.kernel} kernel: {computation_time}\n')
