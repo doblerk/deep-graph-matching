@@ -8,6 +8,7 @@ from itertools import combinations
 
 from torch_geometric.utils import to_networkx 
 from torch_geometric.datasets import TUDataset
+from torch_geometric.transforms import Constant
 
 from gnn_ged.assignment.calc_assignment import NodeAssignment
 from gnn_ged.edit_cost.calc_edit_cost import EditCost
@@ -16,6 +17,8 @@ from gnn_ged.edit_cost.calc_edit_cost import EditCost
 def load_dataset(args):
     """Loads the dataset from TUDataset and converts it into NetworkX"""
     dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
+    if 'x' not in dataset[0]:
+        dataset.transform = Constant(value=1.0)
     dataset_nx = [to_networkx(dataset[i], node_attrs='x', to_undirected=True) for i in range(len(dataset))]
     return dataset_nx
 
