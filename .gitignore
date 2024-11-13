@@ -7,15 +7,16 @@ data/TUDataset/*
 # Scripts
 gnn_ged/quick_testing.py
 gnn_ged/utils.py
-gnn_ged/__pycache__/
-gnn_ged/models/__pycache__/
+**/__pycache__/
 
 # Tests
 tests/__pycache__/
 
 # Personal
+.vscode/
 res/
 src/build/
+src/greedy_assignment*
 
 # Miscellaneous
 gnn_ged.egg-info
