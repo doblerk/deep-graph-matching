@@ -19,14 +19,14 @@ def load_dataset(args):
     dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
     if 'x' not in dataset[0]:
         dataset.transform = Constant(value=1.0)
-    dataset_nx = [to_networkx(dataset[i], node_attrs='x', to_undirected=True) for i in range(len(dataset))]
+    dataset_nx = {i:to_networkx(dataset[i], node_attrs='x', to_undirected=True) for i in range(len(dataset))}
     return dataset_nx
 
 
 def load_embeddings(args, dataset_size):
     """Loads the train and test embeddings"""
     with h5py.File(args.node_embeddings, 'r') as f:
-        node_embeddings = [np.array(f[f'embedding_{i}']) for i in range(dataset_size)]
+        node_embeddings = {i:np.array(f[f'embedding_{i}']) for i in range(dataset_size)}
     return node_embeddings
 
 
