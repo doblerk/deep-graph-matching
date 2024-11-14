@@ -16,7 +16,7 @@ tests/__pycache__/
 .vscode/
 res/
 src/build/
-src/greedy_assignment*
+gnn_ged/assignment/greedy_assignment*
 
 # Miscellaneous
 gnn_ged.egg-info

@@ -59,10 +59,19 @@ def calc_matrix_distances(args):
 
         node_assignment = NodeAssignment(source_embedding, target_embedding)
 
-        embedding_distances = node_assignment.compute_embedding_distances()
+        cost_matrix = node_assignment.calc_cost_matrix()
 
-        assignment = node_assignment.compute_node_assignment(embedding_distances)
+        match args.method:
 
+            case 'lsap':
+                assignment = node_assignment.calc_linear_sum_assignment(cost_matrix)
+            
+            case 'greedy':
+                assignment = node_assignment.calc_greedy_assignment(cost_matrix)
+            
+            case 'flow':
+                assignment = node_assignment.calc_min_cost_flow(cost_matrix)
+        
         edit_cost = EditCost(assignment, source_graph, target_graph)
 
         node_cost = edit_cost.compute_cost_node_edit()
@@ -76,9 +85,9 @@ def calc_matrix_distances(args):
     computation_time = t1 - t0
     
     with open(os.path.join(args.output_dir, 'computation_time.txt'), 'a') as file:
-        file.write(str(computation_time) + '\n')
+        file.write(f'Computation time for {args.method} : {computation_time}\n')
     
-    np.save(os.path.join(args.output_dir, f'distances.npy'), matrix_distances)
+    np.save(os.path.join(args.output_dir, f'distances_{args.method}.npy'), matrix_distances)
 
 
 def get_args_parser():
@@ -87,6 +96,7 @@ def get_args_parser():
     parser.add_argument('--dataset_name', type=str, help='Dataset name')
     parser.add_argument('--node_embeddings', type=str, help='Path to node embeddings file')
     parser.add_argument('--output_dir', type=str, help='Path to output directory')
+    parser.add_argument('--method', type=str, choices=['lsap', 'greedy', 'flow'], default='lsap', help='Assignment method')
     return parser
 
 
