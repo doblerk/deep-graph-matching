@@ -48,6 +48,15 @@ class ConvexHullChild(ConvexHull):
 
     def calc_relative_spatial(self):
         return self.calc_diameter() / self.calc_volume()
+    
+    def calc_edge_statistics(self):
+        vertices = self.vertices.tolist() + [self.vertices[0]]
+        edge_lengths = [euclidean(x, y) for x, y in zip(self.points[vertices], self.points[vertices[1:]])]
+        mean_edge_length = np.mean(edge_lengths)
+        var_edge_lengths = np.var(edge_lengths)
+        shortest_edge, longest_edge = min(edge_lengths), max(edge_lengths)
+        ratio_lengths = shortest_edge / longest_edge
+        return [mean_edge_length, var_edge_lengths, ratio_lengths]
 
     def calc_mom_inertia():
         pass
@@ -69,17 +78,22 @@ class ConvexHullChild(ConvexHull):
 def load_embeddings(args, dataset_size):
     """Loads the train and test embeddings"""
     with h5py.File(args.node_embeddings, 'r') as f:
-        node_embeddings = [np.array(f[f'embedding_{i}']) for i in range(dataset_size)]
+        node_embeddings = {i:np.array(f[f'embedding_{i}']) for i in range(dataset_size)}
     return node_embeddings
 
 
-def reduce_embedding_dimensionality(embeddings, n_components=2):
+def reduce_embedding_dimensionality(embeddings, dims):
     """Reduces the dimensionality of each node embedding"""
-    reduced_embeddings = []
-    for i in range(len(embeddings)):
-        model = PCA(n_components=n_components).fit(embeddings[i])
-        reduced_embeddings.append(model.transform(embeddings[i]))
-    return reduced_embeddings
+    return {
+        dim: {i: PCA(n_components=dim).fit_transform(embedding) for i, embedding in embeddings.items()} 
+        for dim in dims
+    }
+
+
+def get_min_graph(dataset):
+    """Returns the size of the smaller graph"""
+    return min(data.x.shape[0] for data in dataset)
+
 
 def calc_matrix_distances(args):
 
@@ -87,32 +101,36 @@ def calc_matrix_distances(args):
 
     embeddings = load_embeddings(args, len(dataset))
 
-    reduced_embeddings = reduce_embedding_dimensionality(embeddings)
+    min_graph = get_min_graph(dataset)
 
-    """
-        -> [Cx, Cy, P, V, S, D, Rsh, Rsp]
-    """
-
-    convex_hulls = dict.fromkeys(range(len(embeddings)), list())
-
-    t0 = time()
-
-    for k, _ in convex_hulls.items():
-        convex_hulls[k] = ConvexHullChild(reduced_embeddings[k]).calc_all_feats()
-
-    convex_hulls_stacked = np.vstack(list(convex_hulls.values()))
-    convex_hulls_stacked_normalized = normalize(convex_hulls_stacked, axis=0, norm='max')
-    matrix_distances = squareform(pdist(convex_hulls_stacked_normalized, metric='cosine')) # or euclidean
-
-    # matrix_distances = squareform(pdist([[v] for v in list(convex_hulls.values())], metric='euclidean')) # volumes
-
-    t1 = time()
-    computation_time = t1 - t0
-
-    with open(os.path.join(args.output_dir, 'computation_time.txt'), 'a') as file:
-        file.write(str(computation_time) + '\n')
+    dims = list(range(2, min_graph)) # min_graph - 1 but range() stops at end - 1
     
-    np.save(os.path.join(args.output_dir, f'distances.npy'), matrix_distances)
+    reduced_embeddings = reduce_embedding_dimensionality(embeddings, dims)
+
+    """
+        -> [Cx, Cy, ..., P, V, S, D, Rsh, Rsp]
+    """
+
+    for dim in dims:
+
+        convex_hulls = dict.fromkeys(range(len(embeddings)), list())
+
+        t0 = time()
+
+        for k, _ in convex_hulls.items():
+            convex_hulls[k] = ConvexHullChild(reduced_embeddings[dim][k]).calc_all_feats()
+
+        convex_hulls_stacked = np.vstack(list(convex_hulls.values()))
+        convex_hulls_stacked_normalized = normalize(convex_hulls_stacked, axis=0, norm='max')
+        matrix_distances = squareform(pdist(convex_hulls_stacked_normalized, metric='euclidean'))
+
+        t1 = time()
+        computation_time = t1 - t0
+
+        with open(os.path.join(args.output_dir, 'computation_time_convhull.txt'), 'a') as file:
+            file.write(f'Computation time for {dim}: {computation_time}\n')
+        
+        np.save(os.path.join(args.output_dir, f'distances_convhull_{dim}.npy'), matrix_distances)
 
 
 def get_args_parser():
