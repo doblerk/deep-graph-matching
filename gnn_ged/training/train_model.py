@@ -82,24 +82,24 @@ def train_model(train_loader, test_loader, device, optimizer, model, criterion, 
 
         scheduler.step()
 
-        if epoch % 50 == 0:
+        if epoch % 1 == 0:
             print(f'Epoch {epoch:<3} | Train Loss: {train_loss:.5f} | Train Acc: {train_accuracy*100:.2f} | Test Loss: {test_loss:.5f} | Test Acc: {test_accuracy*100:.2f}')
         
-        # log_stats = {'Epoch': epoch, 'Train loss': train_loss, 'Train accuracy': train_accuracy, 'Test loss': test_loss, 'Test accuracy': test_accuracy}
-        # with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
-        #     f.write(json.dumps(log_stats) + '\n')
+        log_stats = {'Epoch': epoch, 'Train loss': train_loss, 'Train accuracy': train_accuracy, 'Test loss': test_loss, 'Test accuracy': test_accuracy}
+        with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
+            f.write(json.dumps(log_stats) + '\n')
     
     t1 = time()
     computation_time = str(datetime.timedelta(seconds=int(t1 - t0)))
     print(f'Training time {computation_time}')
 
     # Save the model
-    # save_dict = {
-    #     'model_state_dict': model.state_dict(),
-    #     'optimizer': optimizer.state_dict(),
-    #     'epoch': epoch + 1,
-    # }
-    # torch.save(save_dict, os.path.join(args.output_dir, 'checkpoint.pth'))
+    save_dict = {
+        'model_state_dict': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
+        'epoch': epoch + 1,
+    }
+    torch.save(save_dict, os.path.join(args.output_dir, 'checkpoint.pth'))
 
 
 def get_args_parser():
@@ -112,7 +112,10 @@ def get_args_parser():
     parser.add_argument('--n_layers', type=int, default=3, help='Number of convolution layers')
     parser.add_argument('--epochs', type=int, default=201, help='Number of epochs')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
-    parser.add_argument('--use_attrs', action='store_true', help='Use node attributes')
+    parser.add_argument('--use_attrs', type=bool, default=False, help='Use node attributes')
+    parser.add_argument('--step_size', type=float, default=50, help='Scheduler step size')
+    parser.add_argument('--gamma', type=float, default=0.5, help='Multiplicative factor of learning rate decay')
+    parser.add_argument('--weight_decay', type=float, default=0.0001, help='Weight decay')
     parser.add_argument('--indices_dir', type=str, help='Path to indices')
     parser.add_argument('--output_dir', type=str, help='Path to output directory')
     return parser
@@ -121,15 +124,16 @@ def get_args_parser():
 def main(args):
 
     # Write logs
-    # log_args = {k:str(v) for (k,v) in sorted(dict(vars(args)).items())}
-    # with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
-    #     f.write(json.dumps(log_args) + '\n')
+    log_args = {k:str(v) for (k,v) in sorted(dict(vars(args)).items())}
+    with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
+        f.write(json.dumps(log_args) + '\n')
     
     # Set device to CUDA
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Load the dataset from TUDataset
     transform = NormalizeFeatures() if args.use_attrs else None
+    print(transform)
     dataset = TUDataset(root=args.dataset_dir,
                         name=args.dataset_name,
                         use_node_attr=args.use_attrs,
@@ -171,15 +175,15 @@ def main(args):
     ).to(device)
 
     # Define the optimizer and criterion
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.0001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     criterion = torch.nn.CrossEntropyLoss()
-    scheduler = StepLR(optimizer, step_size=50, gamma=0.5)
+    scheduler = StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
 
     # Train the model
     train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, args)
     
     # Extract the embeddings
-    # extract_embeddings(dataset, device, model, args)
+    extract_embeddings(dataset, device, model, args)
 
 
 if __name__ == '__main__':

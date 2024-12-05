@@ -9,6 +9,7 @@ import optuna
 import numpy as np
 
 from sklearn.model_selection import StratifiedKFold
+from torch.optim.lr_scheduler import StepLR
 from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
 from torch_geometric.transforms import NormalizeFeatures, Constant
@@ -65,11 +66,13 @@ def objective(trial):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Hyperparameters to tune
-    lr = trial.suggest_float('lr', 1e-5, 1e-1, log=False)
-    weight_decay = trial.suggest_float('weight_decay', 1e-6, 1e-3, log=False)
-    batch_size = trial.suggest_int('batch_size', 16, 64, step=16)
+    lr = trial.suggest_float('lr', 1e-5, 1e-1, log=True)
+    weight_decay = trial.suggest_float('weight_decay', 1e-6, 1e-2, log=True)
+    batch_size = trial.suggest_int('batch_size', 16, 128, step=16)
     hidden_dim = trial.suggest_int('hidden_dim', 32, 128, step=16)
     num_layers = trial.suggest_int('num_layers', 2, 5)
+    step_size = trial.suggest_int('step_size', 20, 60, step=10)
+    gamma = trial.suggest_float('gamma', 5e-1, 9e-1, step=1e-1)
 
     # Load the dataset from TUDataset
     transform = NormalizeFeatures() if args.use_attrs else None
@@ -97,36 +100,38 @@ def objective(trial):
 
     for fold, (train_idx, val_idx) in enumerate(kf.split(train_dataset, train_labels)):
 
-      train_loader = DataLoader(
-            dataset=train_dataset,
-            batch_size=batch_size,
-            sampler=torch.utils.data.SubsetRandomSampler(train_idx),
-        )
+        train_loader = DataLoader(
+                dataset=train_dataset,
+                batch_size=batch_size,
+                sampler=torch.utils.data.SubsetRandomSampler(train_idx),
+            )
 
-      val_loader = DataLoader(
-            dataset=train_dataset,
-            batch_size=batch_size,
-            sampler=torch.utils.data.SubsetRandomSampler(val_idx),
-        )
+        val_loader = DataLoader(
+                dataset=train_dataset,
+                batch_size=batch_size,
+                sampler=torch.utils.data.SubsetRandomSampler(val_idx),
+            )
+        
+        # Initialize the model
+        model_module = importlib.import_module(f'gnn_ged.models.{args.arch}')
+        model = model_module.Model(
+                input_dim=dataset.num_features,
+                hidden_dim=hidden_dim,
+                n_classes=dataset.num_classes,
+                n_layers=num_layers,
+        ).to(device)
 
-      # Initialize the model
-      model_module = importlib.import_module(f'gnn_ged.models.{args.arch}')
-      model = model_module.Model(
-              input_dim=dataset.num_features,
-              hidden_dim=hidden_dim,
-              n_classes=dataset.num_classes,
-              n_layers=num_layers,
-      ).to(device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+        criterion = torch.nn.CrossEntropyLoss()
+        scheduler = StepLR(optimizer, step_size=step_size, gamma=gamma)
 
-      optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-      criterion = torch.nn.CrossEntropyLoss()
+        for epoch in range(11):
+            train(train_loader, device, optimizer, model, criterion)
+            scheduler.step()
 
-      for epoch in range(11):
-        train(train_loader, device, optimizer, model, criterion)
-
-      val_accuracy, val_loss = test(val_loader, device, model, criterion)
-      val_accuracies.append(val_accuracy)
-      val_losses.append(val_loss)
+        val_accuracy, val_loss = test(val_loader, device, model, criterion)
+        val_accuracies.append(val_accuracy)
+        val_losses.append(val_loss)
 
     return np.mean(val_accuracies)
 
@@ -136,7 +141,7 @@ def get_args_parser():
     parser.add_argument('--dataset_dir', type=str, help='Path to dataset directory')
     parser.add_argument('--dataset_name', type=str, help='Dataset name')
     parser.add_argument('--arch', type=str, choices=['gin', 'gat', 'gcn', 'gsage'], help='GNN architecture')
-    parser.add_argument('--use_attrs', action='store_true', help='Use node attributes')
+    parser.add_argument('--use_attrs', type=bool, default=False, help='Use node attributes')
     parser.add_argument('--indices_dir', type=str, help='Path to indices')
     parser.add_argument('--output_dir', type=str, help='Path to output directory')
     return parser
@@ -145,7 +150,7 @@ def get_args_parser():
 def main(args):
     # Create Optuna study and optimize
     study = optuna.create_study(direction='maximize')
-    study.optimize(objective, n_trials=11) # Number of trials
+    study.optimize(objective, n_trials=5) # Number of trials
 
     best_params = study.best_params
     print("Best hyperparameters:", best_params)
@@ -165,6 +170,8 @@ def main(args):
         file.write(f"batch_size: {trial.params['batch_size']}\n")
         file.write(f"hidden_dim: {trial.params['hidden_dim']}\n")
         file.write(f"num_layers: {trial.params['num_layers']}\n")
+        file.write(f"step_size: {trial.params['step_size']}\n")
+        file.write(f"gamma: {trial.params['gamma']}\n")
 
 
 if __name__ == '__main__':
