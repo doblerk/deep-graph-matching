@@ -96,7 +96,6 @@ def objective(trial):
     kf = StratifiedKFold(n_splits=n_splits)
 
     val_accuracies = []
-    val_losses = []
 
     for fold, (train_idx, val_idx) in enumerate(kf.split(train_dataset, train_labels)):
 
@@ -129,9 +128,17 @@ def objective(trial):
             train(train_loader, device, optimizer, model, criterion)
             scheduler.step()
 
-        val_accuracy, val_loss = test(val_loader, device, model, criterion)
+            if fold == 0:
+                # first fold: report and prune
+                _, val_loss = test(val_loader, device, model, criterion)
+                trial.report(val_loss, epoch)
+                if trial.should_prune():
+                    raise optuna.exceptions.TrialPruned()
+
+        val_accuracy, _ = test(val_loader, device, model, criterion)
         val_accuracies.append(val_accuracy)
-        val_losses.append(val_loss)
+
+    trial.set_user_attr('val_accuracies', val_accuracies)
 
     return np.mean(val_accuracies)
 
@@ -150,28 +157,44 @@ def get_args_parser():
 def main(args):
     # Create Optuna study and optimize
     study = optuna.create_study(direction='maximize')
-    study.optimize(objective, n_trials=5) # Number of trials
+    study.optimize(objective, n_trials=501, timeout=86000) # Number of trials
+
+    pruned_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]
+    complete_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+
+    print("Study statistics: ")
+    print("  Number of finished trials: ", len(study.trials))
+    print("  Number of pruned trials: ", len(pruned_trials))
+    print("  Number of complete trials: ", len(complete_trials))
 
     best_params = study.best_params
     print("Best hyperparameters:", best_params)
 
     print("Best trial:")
-    trial = study.best_trial
+    best_trial = study.best_trial
 
-    print("  Value: ", trial.value)
+    print("  Value: ", best_trial.value)
 
     print("  Params: ")
-    for key, value in trial.params.items():
+    for key, value in best_trial.params.items():
         print("    {}: {}".format(key, value))
-    
+
+    best_val_accuracies = best_trial.user_attrs['val_accuracies']
+    print(best_val_accuracies)
+    mean_accuracy = np.mean(best_val_accuracies)
+    std_accuracy = np.std(best_val_accuracies)
+
+    print(f'Mean k-fold CV accuracy: {mean_accuracy:.4f}')
+    print(f'Standard deviation of k-fold CV accuracy: {std_accuracy:.4f}')
+
     with open(os.path.join(args.output_dir, 'log_cv.txt'), 'a') as file:
-        file.write(f"lr: {trial.params['lr']}\n")
-        file.write(f"weight_decay: {trial.params['weight_decay']}\n")
-        file.write(f"batch_size: {trial.params['batch_size']}\n")
-        file.write(f"hidden_dim: {trial.params['hidden_dim']}\n")
-        file.write(f"num_layers: {trial.params['num_layers']}\n")
-        file.write(f"step_size: {trial.params['step_size']}\n")
-        file.write(f"gamma: {trial.params['gamma']}\n")
+        file.write(f"lr: {best_trial.params['lr']}\n")
+        file.write(f"weight_decay: {best_trial.params['weight_decay']}\n")
+        file.write(f"batch_size: {best_trial.params['batch_size']}\n")
+        file.write(f"hidden_dim: {best_trial.params['hidden_dim']}\n")
+        file.write(f"num_layers: {best_trial.params['num_layers']}\n")
+        file.write(f"step_size: {best_trial.params['step_size']}\n")
+        file.write(f"gamma: {best_trial.params['gamma']}\n")
 
 
 if __name__ == '__main__':

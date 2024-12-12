@@ -8,7 +8,7 @@ from itertools import combinations
 
 from torch_geometric.utils import to_networkx 
 from torch_geometric.datasets import TUDataset
-from torch_geometric.transforms import Constant
+from torch_geometric.transforms import NormalizeFeatures, Constant
 
 from gnn_ged.assignment.calc_assignment import NodeAssignment
 from gnn_ged.edit_cost.calc_edit_cost import EditCost
@@ -16,7 +16,11 @@ from gnn_ged.edit_cost.calc_edit_cost import EditCost
 
 def load_dataset(args):
     """Loads the dataset from TUDataset and converts it into NetworkX"""
-    dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
+    transform = NormalizeFeatures() if args.use_attrs else None
+    dataset = TUDataset(root=args.dataset_dir,
+                        name=args.dataset_name,
+                        use_node_attr=args.use_attrs,
+                        transform=transform)
     if 'x' not in dataset[0]:
         dataset.transform = Constant(value=1.0)
     dataset_nx = {i:to_networkx(dataset[i], node_attrs='x', to_undirected=True) for i in range(len(dataset))}
@@ -74,7 +78,7 @@ def calc_matrix_distances(args):
         
         edit_cost = EditCost(assignment, source_graph, target_graph)
 
-        node_cost = edit_cost.compute_cost_node_edit()
+        node_cost = edit_cost.compute_cost_node_edit(use_attrs=args.use_attrs)
         edge_cost = edit_cost.compute_cost_edge_edit()
         
         matrix_distances[i,j] = node_cost + edge_cost
@@ -83,7 +87,7 @@ def calc_matrix_distances(args):
 
     t1 = time()
     computation_time = t1 - t0
-    
+
     with open(os.path.join(args.output_dir, 'computation_time.txt'), 'a') as file:
         file.write(f'Computation time for {args.method} : {computation_time}\n')
     
@@ -95,6 +99,7 @@ def get_args_parser():
     parser.add_argument('--dataset_dir', type=str, help='Path to dataset')
     parser.add_argument('--dataset_name', type=str, help='Dataset name')
     parser.add_argument('--node_embeddings', type=str, help='Path to node embeddings file')
+    parser.add_argument('--use_attrs', type=bool, default=False, help='Use node attributes')
     parser.add_argument('--output_dir', type=str, help='Path to output directory')
     parser.add_argument('--method', type=str, choices=['lsap', 'greedy', 'flow'], default='lsap', help='Assignment method')
     return parser
@@ -105,7 +110,7 @@ def main(args):
     Computes all pairwise distances between every pair of graphs to yield a dissimilarity matrix.
 
     Args:
-        args: command-line arguments (path to dataset directory, dataset name, path to node embeddings, and path to output directory).
+        args: command-line arguments.
     """
     calc_matrix_distances(args)
 

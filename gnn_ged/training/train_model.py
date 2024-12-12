@@ -133,7 +133,6 @@ def main(args):
 
     # Load the dataset from TUDataset
     transform = NormalizeFeatures() if args.use_attrs else None
-    print(transform)
     dataset = TUDataset(root=args.dataset_dir,
                         name=args.dataset_name,
                         use_node_attr=args.use_attrs,

@@ -43,7 +43,7 @@ def knn_classifier(args):
     train_labels = list(dataset[train_idx].y.numpy())
     test_labels = list(dataset[test_idx].y.numpy())
 
-    if args.average == 'average':
+    if args.average == 'binary':
         scoring = 'f1'
     else:
         scoring = 'f1_micro'
