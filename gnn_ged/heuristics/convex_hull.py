@@ -5,121 +5,121 @@ import argparse
 import numpy as np
 
 from time import time
-from itertools import product
+from scipy.special import gamma
 from sklearn.decomposition import PCA
-from sklearn.preprocessing import normalize 
+from sklearn.preprocessing import normalize
 from torch_geometric.datasets import TUDataset
 
 from scipy.spatial import ConvexHull
 from scipy.spatial.distance import euclidean, pdist, squareform
 
 
-# https://stackoverflow.com/questions/26408110/why-does-qhull-error-when-computing-convex-hull-of-a-few-points
-# https://gist.github.com/Vini2/2d35132f70ee18298fdea142b5530a52
-# https://medium.com/@errazkim/computing-the-convex-hull-in-python-60a6087e0faa
-# The expected number of vertices in the convex hull is O(n^(m−1/m+1)) for n→∞. It was proved in 1970 by H. Raynaud in "Sur l’enveloppe convex des nuages de points aleatoires dans Rn".
-# https://locationtech.github.io/jts/javadoc/org/locationtech/jts/algorithm/MinimumBoundingCircle.html
-
-
 class ConvexHullChild(ConvexHull):
 
     def __init__(self, points):
         ConvexHull.__init__(self, points, qhull_options='QJ')
+        self._centroid = None
+        self._perimeter = None
+        self._volume = self.volume
+        self._diameter = None
 
     def calc_centroid(self):
-        centroid = [np.mean(self.points[self.vertices, i]) for i in range(self.points.shape[1])]
-        return centroid
+        if self._centroid is None:
+            self._centroid = [
+                np.mean(self.points[self.vertices, i])
+                for i in range(self.points.shape[1])
+            ]
+        return self._centroid
 
-    def calc_perimeter(self):
-        vertices = self.vertices.tolist() + [self.vertices[0]] # close the loop by adding the first vertex
-        perimeter = sum(euclidean(x, y) for x, y in zip(self.points[vertices], self.points[vertices[1:]]))
-        return perimeter
-    
-    def calc_volume(self):
-        return self.volume
-    
-    def calc_relative_shape(self):
-        return self.calc_perimeter() / self.calc_volume()
-    
     def calc_hull_size(self):
         return len(self.vertices)
 
-    def calc_diameter(self):
-        diameter = np.max(pdist(self.points[self.vertices], metric='euclidean'))
-        return diameter
+    def calc_perimeter(self):
+        if self._perimeter is None:
+            vertices = self.vertices.tolist() + [self.vertices[0]]
+            self._perimeter = sum(
+                euclidean(x, y) for x, y in zip(self.points[vertices], self.points[vertices[1:]])
+            )
+        return self._perimeter
 
-    def calc_relative_spatial(self):
-        return self.calc_diameter() / self.calc_volume()
+    def calc_volume(self):
+        return self._volume
+    
+    def calc_diameter(self):
+        if self._diameter is None:
+            self._diameter = np.max(
+                pdist(self.points[self.vertices], metric='euclidean')
+            )
+        return self._diameter
+
+    def calc_isoperimetric_quotient(self):
+        perimeter = self.calc_perimeter()
+        area = self.calc_volume()
+        r_circle = perimeter / (2 * np.pi)
+        area_circle = np.pi * r_circle**2
+        return area / area_circle
+
+    def calc_minimum_bounding_sphere(self):
+        dimension = self.points.shape[1]
+        radius = self.calc_diameter() / 2
+        n_sphere_volume = (np.pi ** (dimension / 2) * radius ** dimension) / gamma((dimension / 2) + 1)
+        compactness = self.calc_volume() / n_sphere_volume if n_sphere_volume > 0 else 0
+        return {
+            'sphere_radius': radius,
+            'sphere_volume': n_sphere_volume,
+            'compactness': compactness
+        }
     
     def calc_edge_statistics(self):
         vertices = self.vertices.tolist() + [self.vertices[0]]
         edge_lengths = [euclidean(x, y) for x, y in zip(self.points[vertices], self.points[vertices[1:]])]
         return {
             'mean_edge_length': np.mean(edge_lengths),
-            'variance_edge_length': np.var(edge_lengths),
             'shortest_edge': min(edge_lengths),
             'longest_edge': max(edge_lengths),
             'ratio_lengths': min(edge_lengths) / max(edge_lengths)
         }
-
-    def calc_isoperimetric_quotient(self):
-        area = self.calc_volume()
-        perim = self.calc_perimeter()
-        r_circle = perim / 2 * np.pi
-        area_circle = np.pi * r_circle**2
-        return area / area_circle
     
-    def calc_minimum_bounding_circle(self):
-        diameter = self.calc_diameter()
-        radius = diameter / 2
-        area_circle = np.pi * radius**2
-        return {
-            'circle_radius': radius,
-            'circle_area': area_circle,
-            'compactness': self.calc_volume / area_circle # Reock Compactness
-        }
-    
-    def calc_turning_functions(self):
-        vertices = self.vertices.tolist() + [self.vertices[0]]
-        turning_angles = [
-            np.arctan2(
-                self.points[vertices[i + 1]][1] - self.points[vertices[i]][1],
-                self.points[vertices[i + 1]][0] - self.points[vertices[i]][0]
-            )
-            for i in range(len(self.vertices))
-        ]
-        return turning_angles
+    def calc_point_density(self):
+        return self.calc_hull_size() / self.calc_volume()
 
-    def calc_aspect_ratio(self):
-        pca = np.linalg.svd(self.points[self.vertices] - np.mean(self.points[self.vertices], axis=0))
-        return pca[1][0] / pca[1][-1]  # Ratio of largest to smallest singular value
+    def calc_relative_shape(self):
+        return self.calc_perimeter() / self.calc_volume()
 
-    def calc_all_feats(self, 
-                       use_centroid=True,
-                       use_area=True,
-                       use_perimeter=True,
-                       use_hull_size=True,
-                       use_diameter=True,
-                       use_iq=True,
-                       use_rel_shape=True,
-                       use_rel_spatial=True):
+    def calc_relative_spatial(self):
+        return self.calc_diameter() / self.calc_volume()
+
+    def calc_all_feats(self, config):
         feats = []
-        if use_centroid:
-            feats.append(*self.calc_centroid())
-        if use_area:
-            feats.append(self.calc_volume())
-        if use_perimeter:
-            feats.append(self.calc_perimeter())
-        if use_hull_size:
+        if config.get('use_centroid', True):
+            feats.extend([*self.calc_centroid()])
+        if config.get('use_hull_size', True):
             feats.append(self.calc_hull_size())
-        if use_diameter:
+        if config.get('use_perimeter', True):
+            feats.append(self.calc_perimeter())
+        if config.get('use_area', True):
+            feats.append(self.calc_volume())
+        if config.get('use_diameter', True):
             feats.append(self.calc_diameter())
-        if use_iq:
+        if config.get('use_iq', True):
             feats.append(self.calc_isoperimetric_quotient())
-        if use_rel_shape and use_area and use_perimeter:
-            feats.append(self.calc_perimeter() / self.calc_volume())
-        if use_rel_spatial and use_area and use_diameter:
-            feats.append(self.calc_diameter() / self.calc_volume())
+        if config.get('use_mbs', True):
+            mbs = self.calc_minimum_bounding_sphere()
+            feats.extend([mbs['sphere_radius'], 
+                          mbs['sphere_volume'], 
+                          mbs['compactness']])
+        if config.get('use_edge_stats', True):
+            edge_stats = self.calc_edge_statistics()
+            feats.extend([edge_stats['mean_edge_length'], 
+                          edge_stats['shortest_edge'],
+                          edge_stats['longest_edge'], 
+                          edge_stats['ratio_lengths']])
+        if config.get('use_point_density', True):
+            feats.append(self.calc_point_density())
+        if config.get('use_rel_shape', True):
+            feats.append(self.calc_relative_shape())
+        if config.get('use_rel_spatial', True):
+            feats.append(self.calc_relative_spatial())
         return feats
 
 
@@ -133,7 +133,7 @@ def load_embeddings(args, dataset_size):
 def reduce_embedding_dimensionality(embeddings, dims):
     """Reduces the dimensionality of each node embedding"""
     return {
-        dim: {i: PCA(n_components=dim).fit_transform(embedding) for i, embedding in embeddings.items()} 
+        dim: {i: PCA(n_components=dim).fit_transform(embedding) for i, embedding in embeddings.items()}
         for dim in dims
     }
 
@@ -156,35 +156,54 @@ def calc_matrix_distances(args):
     reduced_embeddings = reduce_embedding_dimensionality(embeddings, dims)
 
     """
-        -> [Cx, Cy, ..., P, V, S, D, Rsh, Rsp]
+        -> [Cx, Cy, ..., Rsh, Rsp]
     """
 
-    feats = ['use_centroid', 'use_area', 'use_perimeter', 'use_hull_size',
-             'use_diameter', 'use_rel_shape', 'use_rel_spatial']
+    feats = ['use_centroid', 'use_hull_size', 'use_perimeter', 'use_area',
+             'use_diameter', 'use_iq', 'use_mbs', 'use_edge_stats',
+             'use_point_density', 'use_rel_shape', 'use_rel_spatial']
     
-    ablation_configs = [dict(zip(feats, combo)) for combo in product([True, False], repeat=len(feats))]
+    all_feats_true = {feat: True for feat in feats}
+    
+    leave_one_out_feats = [
+        {feat: (feat != leave_out) for feat in feats}
+        for leave_out in feats
+    ]
+    
+    ablation_configs = [all_feats_true] + leave_one_out_feats
 
     for dim in dims:
 
-        convex_hulls = dict.fromkeys(range(len(embeddings)), list())
-
-        t0 = time()
-
-        for k, _ in convex_hulls.items():
-            convex_hulls[k] = ConvexHullChild(reduced_embeddings[dim][k]).calc_all_feats()
-
-        convex_hulls_stacked = np.vstack(list(convex_hulls.values()))
-        convex_hulls_stacked_normalized = normalize(convex_hulls_stacked, axis=0, norm='max')
-        matrix_distances = squareform(pdist(convex_hulls_stacked_normalized, metric='euclidean'))
-
-        t1 = time()
-        computation_time = t1 - t0
+        distance_matrices = []
 
         with open(os.path.join(args.output_dir, 'computation_time_convhull.txt'), 'a') as file:
-            file.write(f'Computation time for {dim}: {computation_time}\n')
-        
-        np.save(os.path.join(args.output_dir, f'distances_convhull_{dim}.npy'), matrix_distances)
+            file.write(f'Computation times for dimension {dim}:\n')
 
+        for config_idx, config in enumerate(ablation_configs):
+
+            convex_hulls = dict.fromkeys(range(len(embeddings)), list())
+            
+            t0 = time()
+            
+            for graph_idx, _ in convex_hulls.items():
+                convex_hulls[graph_idx] = ConvexHullChild(reduced_embeddings[dim][graph_idx]).calc_all_feats(config)
+            
+            convex_hulls_stacked = np.vstack(list(convex_hulls.values()))
+            convex_hulls_stacked_normalized = normalize(convex_hulls_stacked, axis=0, norm='max')
+            matrix_distances = squareform(pdist(convex_hulls_stacked_normalized, metric='euclidean'))
+
+            t1 = time()
+            computation_time = t1 - t0
+
+            with open(os.path.join(args.output_dir, 'computation_time_convhull.txt'), 'a') as file:
+                file.write(f'   Computation times for config {config_idx:2}: {computation_time}\n')
+
+            distance_matrices.append(matrix_distances)        
+        
+        with h5py.File(os.path.join(args.output_dir, f'distances_dim_{dim}.h5'), 'w') as f:
+            for config, matrix in enumerate(distance_matrices, start=0):
+                f.create_dataset(f'config_{config}', data=matrix)
+        
 
 def get_args_parser():
     parser = argparse.ArgumentParser()
