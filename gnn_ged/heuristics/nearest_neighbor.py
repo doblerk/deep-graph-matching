@@ -3,7 +3,7 @@ import numpy as np
 from time import time
 from itertools import chain, repeat
 from sklearn.metrics import f1_score
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import cdist, pdist
 from scipy.optimize import linear_sum_assignment
 from torch_geometric.datasets import TUDataset
 
@@ -24,7 +24,7 @@ def get_indices(train_idx, test_idx, dataset):
     testing_indices = list(chain.from_iterable(repeat(idx, dataset[idx].num_nodes) for idx in test_idx))
     return np.array(training_indices), np.array(testing_indices)
 
-def get_labels(test_idx, testing_indices, training_indices, dataset, distances):
+def get_labels(test_idx, testing_indices, testing_embeddings, training_indices, training_embeddings, dataset, distances):
     '''Predicts labels for test data and collects true labels'''
     predicted_labels = []
     true_labels = []
@@ -74,7 +74,7 @@ def main(args):
 
     t0 = time()
     predicted_labels, true_labels = get_labels(
-        test_idx, testing_indices, training_indices, dataset, distances
+        test_idx, testing_indices, testing_embeddings, training_indices, training_embeddings, dataset, distances
     )
     t1 = time()
     computation_time = t1 - t0
