@@ -40,7 +40,7 @@ class NodeAssignment:
     
     def calc_greedy_assignment(self,
                                cost_matrix : np.ndarray) -> List[List[int]]:
-        ci = greedy_assignment.calc_greedy_assignment_fast(cost_matrix.tolist())
+        ci = greedy_assignment.calc_greedy_assignment_fast(cost_matrix)
         return list(zip(range(len(ci)), ci))
 
     def calc_min_cost_flow(self, cost_matrix):
@@ -49,7 +49,7 @@ class NodeAssignment:
 
         cost_matrix = (cost_matrix * 100).astype(np.uint32)
 
-        num_workers, num_tasks = cost_matrix.shape[0], cost_matrix.shape[1]
+        num_workers, num_tasks = cost_matrix.shape
 
         source = num_workers + num_tasks
         sink = source + 1

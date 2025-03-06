@@ -87,7 +87,7 @@ std::vector<int> calc_greedy_assignment_fast(py::array_t<double> cost_matrix_np)
     auto *ptr = static_cast<double *>(buf.ptr);
     
     // Flattened cost matrix
-    std::vector<double> cost_matrix(ptr, ptr + (num_rows * num_cols));
+    // std::vector<double> cost_matrix(ptr, ptr + (num_rows * num_cols));
 
     // Structures to keep track of row and column availability
     std::vector<bool> rowNotDeleted(num_rows, true);
@@ -98,7 +98,7 @@ std::vector<int> calc_greedy_assignment_fast(py::array_t<double> cost_matrix_np)
 
     // Greedy assignment loop
     for (int k = 0; k < num_rows; ++k) {
-        min_cost = std::numeric_limits<double>::max();
+        min_cost = 100.0;
         min_row = -1, min_col = -1;
 
         // Find the minimum cost element in the available rows and columns
@@ -106,7 +106,8 @@ std::vector<int> calc_greedy_assignment_fast(py::array_t<double> cost_matrix_np)
             if (rowNotDeleted[i]) {
                 for (int j = 0; j < num_cols; ++j) {
                     if (colNotDeleted[j]) {
-                        tmp_cost = cost_matrix[i * num_cols + j];
+                        // tmp_cost = cost_matrix[i * num_cols + j];
+                        tmp_cost = ptr[i * num_cols + j];
                         if (tmp_cost < min_cost) {
                             min_cost = tmp_cost;
                             min_row = i;

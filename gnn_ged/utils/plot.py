@@ -26,7 +26,6 @@ def plot(args):
     test_true_distance_matrix = test_true_distance_matrix[:, train_idx]
     test_true_distance_matrix = test_true_distance_matrix.flatten(order='C')
 
-
     # Normalize the values
     pred_distances_normalized = ((test_pred_distance_matrix - np.min(test_pred_distance_matrix)) / (np.max(test_pred_distance_matrix) - np.min(test_pred_distance_matrix))).squeeze()
     true_distances_normalized = ((test_true_distance_matrix - np.min(test_true_distance_matrix)) / (np.max(test_true_distance_matrix) - np.min(test_true_distance_matrix))).squeeze()

@@ -69,6 +69,7 @@ class Model(torch.nn.Module):
 
         self.dense_layers = Sequential(
             Linear(hidden_dim * n_layers, hidden_dim * n_layers),
+            BatchNorm1d(hidden_dim * n_layers),
             ReLU(),
             Dropout(p=0.2),
             Linear(hidden_dim * n_layers, n_classes)

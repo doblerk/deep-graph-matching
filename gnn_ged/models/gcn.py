@@ -8,8 +8,8 @@
 import torch
 import torch.nn.functional as F
 
-from torch.nn import Linear, ReLU, Dropout, Sequential
-from torch_geometric.nn import GCNConv, GraphNorm, global_mean_pool
+from torch.nn import Linear, BatchNorm1d, ReLU, Dropout, Sequential
+from torch_geometric.nn import GCNConv, GraphNorm, global_add_pool
 
 
 class GCNLayer(torch.nn.Module):
@@ -63,6 +63,7 @@ class Model(torch.nn.Module):
 
         self.dense_layers = Sequential(
             Linear(hidden_dim, hidden_dim),
+            BatchNorm1d(hidden_dim),
             ReLU(),
             Dropout(p=0.2),
             Linear(hidden_dim, n_classes)
@@ -86,7 +87,7 @@ class Model(torch.nn.Module):
             node_embeddings.append(x)
 
         # Graph-level readout
-        x = global_mean_pool(node_embeddings[-1], batch)
+        x = global_add_pool(node_embeddings[-1], batch)
 
         # Classify
         z = self.dense_layers(x)
