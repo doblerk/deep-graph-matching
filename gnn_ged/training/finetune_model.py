@@ -157,7 +157,7 @@ def get_args_parser():
 def main(args):
     # Create Optuna study and optimize
     study = optuna.create_study(direction='maximize')
-    study.optimize(objective, n_trials=501, timeout=86000) # Number of trials
+    study.optimize(objective, n_trials=101, timeout=86000) # Number of trials
 
     pruned_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]
     complete_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
