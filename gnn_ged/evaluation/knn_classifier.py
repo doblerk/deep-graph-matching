@@ -48,7 +48,7 @@ def knn_classifier(args):
     else:
         scoring = 'f1_micro'
 
-    ks = (3, 5, 7, 11)
+    ks = (3, 5, 7, 9, 11)
     best_k = None
     best_score = 0
 
