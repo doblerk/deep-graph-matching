@@ -124,7 +124,7 @@ def objective(trial):
         criterion = torch.nn.CrossEntropyLoss()
         scheduler = StepLR(optimizer, step_size=step_size, gamma=gamma)
 
-        for epoch in range(11):
+        for epoch in range(201):
             train(train_loader, device, optimizer, model, criterion)
             scheduler.step()
 
@@ -157,7 +157,7 @@ def get_args_parser():
 def main(args):
     # Create Optuna study and optimize
     study = optuna.create_study(direction='maximize')
-    study.optimize(objective, n_trials=101, timeout=86000) # Number of trials
+    study.optimize(objective, n_trials=101, timeout=82800) # Number of trials
 
     pruned_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]
     complete_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
