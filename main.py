@@ -88,10 +88,10 @@ def calc_matrix_distances(args):
     t1 = time()
     computation_time = t1 - t0
 
-    with open(os.path.join(args.output_dir, 'computation_time.txt'), 'a') as file:
-        file.write(f'Computation time for {args.method} : {computation_time}\n')
+    # with open(os.path.join(args.output_dir, 'computation_time.txt'), 'a') as file:
+    #     file.write(f'Computation time for {args.method} : {computation_time}\n')
     
-    np.save(os.path.join(args.output_dir, f'distances_{args.method}.npy'), matrix_distances)
+    # np.save(os.path.join(args.output_dir, f'distances_{args.method}.npy'), matrix_distances)
 
 
 def get_args_parser():
