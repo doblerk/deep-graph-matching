@@ -5,8 +5,8 @@ venv/
 data/TUDataset/*
  
 # Scripts
-gnn_ged/quick_testing.py
-gnn_ged/utils.py
+gnnged/quick_testing.py
+gnnged/utils.py
 **/__pycache__/
 
 # Tests
@@ -16,7 +16,7 @@ tests/__pycache__/
 .vscode/
 res/
 src/build/
-gnn_ged/assignment/greedy_assignment*
+gnnged/assignment/greedy_assignment*
 
 # Miscellaneous
 gnn_ged.egg-info
