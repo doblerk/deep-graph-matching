@@ -13,7 +13,7 @@ from torch_geometric.datasets import TUDataset
 
 from scipy.spatial.distance import cdist, pdist, squareform
 
-from gnn_ged.edit_cost.calc_edit_cost import EditCost
+from gnnged.edit_cost.calc_edit_cost import EditCost
 
 
 def load_dataset(args):

@@ -14,7 +14,7 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
 from torch_geometric.transforms import NormalizeFeatures, Constant
 
-from gnn_ged.utils.train_utils import get_batch_size
+from gnnged.utils.train_utils import get_batch_size
 
 
 def reset_weights(m):
