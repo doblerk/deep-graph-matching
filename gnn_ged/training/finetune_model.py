@@ -14,6 +14,8 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
 from torch_geometric.transforms import NormalizeFeatures, Constant
 
+from gnn_ged.utils.train_utils import get_batch_size
+
 
 def reset_weights(m):
     '''Resets the weights during each fold to avoid weight leakage'''
@@ -68,51 +70,54 @@ def objective(trial):
     # Hyperparameters to tune
     lr = trial.suggest_float('lr', 1e-5, 1e-1, log=True)
     weight_decay = trial.suggest_float('weight_decay', 1e-6, 1e-2, log=True)
-    batch_size = trial.suggest_int('batch_size', 16, 128, step=16)
-    hidden_dim = trial.suggest_int('hidden_dim', 32, 128, step=16)
-    num_layers = trial.suggest_int('num_layers', 2, 5)
-    step_size = trial.suggest_int('step_size', 20, 60, step=10)
+    hidden_dim = trial.suggest_int('hidden_dim', 32, 128, step=32)
+    num_layers = trial.suggest_int('num_layers', 2, 5, step=1)
+    step_size = trial.suggest_int('step_size', 10, 50, step=10)
     gamma = trial.suggest_float('gamma', 5e-1, 9e-1, step=1e-1)
 
     # Load the dataset from TUDataset
-    transform = NormalizeFeatures() if args.use_attrs else None
-    dataset = TUDataset(root=args.dataset_dir,
-                        name=args.dataset_name,
-                        use_node_attr=args.use_attrs,
+    transform = NormalizeFeatures() if config['use_attrs'] else None
+    dataset = TUDataset(root=config['dataset_dir'],
+                        name=config['dataset_name'],
+                        use_node_attr=config['use_attrs'],
                         transform=transform)
     
     # Check if the data set contains unlabelled nodes
     if 'x' not in dataset[0]:
         dataset.transform = Constant(value=1.0)
 
-    with open(os.path.join(args.indices_dir, 'train_indices.json'), 'r') as fp:
+    with open(os.path.join(config['indices_dir'], 'train_indices.json'), 'r') as fp:
         train_idx = json.load(fp)
 
-    train_dataset = dataset[train_idx]
     train_labels = [dataset[i].y.item() for i in train_idx]
 
     # Perform k-Fold CV
     n_splits = 10
-    kf = StratifiedKFold(n_splits=n_splits)
+    kf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
 
     val_accuracies = []
 
-    for fold, (train_idx, val_idx) in enumerate(kf.split(train_dataset, train_labels)):
+    for fold, (sub_train_idx, val_idx) in enumerate(kf.split(train_idx, train_labels)):
+        
+        train_indices = [train_idx[i] for i in sub_train_idx]
+        val_indices = [train_idx[i] for i in val_idx]
+
+        batch_size = get_batch_size(len(train_indices))
 
         train_loader = DataLoader(
-                dataset=train_dataset,
+                dataset=dataset,
                 batch_size=batch_size,
-                sampler=torch.utils.data.SubsetRandomSampler(train_idx),
+                sampler=torch.utils.data.SubsetRandomSampler(train_indices),
             )
-
+        
         val_loader = DataLoader(
-                dataset=train_dataset,
-                batch_size=batch_size,
-                sampler=torch.utils.data.SubsetRandomSampler(val_idx),
+                dataset=dataset,
+                batch_size=len(val_idx),
+                sampler=torch.utils.data.SubsetRandomSampler(val_indices),
             )
         
         # Initialize the model
-        model_module = importlib.import_module(f'gnn_ged.models.{args.arch}')
+        model_module = importlib.import_module(f"gnn_ged.models.{config['arch']}")
         model = model_module.Model(
                 input_dim=dataset.num_features,
                 hidden_dim=hidden_dim,
@@ -123,8 +128,8 @@ def objective(trial):
         optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
         criterion = torch.nn.CrossEntropyLoss()
         scheduler = StepLR(optimizer, step_size=step_size, gamma=gamma)
-
-        for epoch in range(201):
+        
+        for epoch in range(1):
             train(train_loader, device, optimizer, model, criterion)
             scheduler.step()
 
@@ -143,21 +148,22 @@ def objective(trial):
     return np.mean(val_accuracies)
 
 
-def get_args_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset_dir', type=str, help='Path to dataset directory')
-    parser.add_argument('--dataset_name', type=str, help='Dataset name')
-    parser.add_argument('--arch', type=str, choices=['gin', 'gat', 'gcn', 'gsage'], help='GNN architecture')
-    parser.add_argument('--use_attrs', type=bool, default=False, help='Use node attributes')
-    parser.add_argument('--indices_dir', type=str, help='Path to indices')
-    parser.add_argument('--output_dir', type=str, help='Path to output directory')
-    return parser
+# def get_args_parser():
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument('--dataset_dir', type=str, help='Path to dataset directory')
+#     parser.add_argument('--dataset_name', type=str, help='Dataset name')
+#     parser.add_argument('--arch', type=str, choices=['gin', 'gat', 'gcn', 'gsage'], help='GNN architecture')
+#     parser.add_argument('--use_attrs', type=bool, default=False, help='Use node attributes')
+#     parser.add_argument('--indices_dir', type=str, help='Path to indices')
+#     parser.add_argument('--output_dir', type=str, help='Path to output directory')
+#     return parser
 
 
-def main(args):
+def main(config):
+
     # Create Optuna study and optimize
     study = optuna.create_study(direction='maximize')
-    study.optimize(objective, n_trials=101, timeout=82800) # Number of trials
+    study.optimize(objective, n_trials=1, timeout=82800) # Number of trials
 
     pruned_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]
     complete_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
@@ -187,10 +193,9 @@ def main(args):
     print(f'Mean k-fold CV accuracy: {mean_accuracy:.4f}')
     print(f'Standard deviation of k-fold CV accuracy: {std_accuracy:.4f}')
 
-    with open(os.path.join(args.output_dir, 'log_cv.txt'), 'a') as file:
+    with open(os.path.join(config['output_dir'], 'log_cv.txt'), 'a') as file:
         file.write(f"lr: {best_trial.params['lr']}\n")
         file.write(f"weight_decay: {best_trial.params['weight_decay']}\n")
-        file.write(f"batch_size: {best_trial.params['batch_size']}\n")
         file.write(f"hidden_dim: {best_trial.params['hidden_dim']}\n")
         file.write(f"num_layers: {best_trial.params['num_layers']}\n")
         file.write(f"step_size: {best_trial.params['step_size']}\n")
@@ -198,6 +203,6 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = get_args_parser()
-    args = parser.parse_args()
-    main(args)
+    with open('params.json', 'r') as f:
+        config = json.load(f)
+    main(config)

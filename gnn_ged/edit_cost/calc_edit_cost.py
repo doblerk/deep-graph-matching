@@ -36,6 +36,8 @@ class EditCost:
         self.g2_nodes = set(self.g2_nx.nodes)
         self.g2_mapped_nodes = {x[1] for x in self.node_mapping}
         self.g2_unmapped_nodes = self.g2_nodes - self.g2_mapped_nodes
+        self.g1_attrs = nx.get_node_attributes(g1_nx, 'x')
+        self.g2_attrs = nx.get_node_attributes(g2_nx, 'x')
 
     def compute_cost_node_edit(self, use_attrs: bool = False) -> int:
         """
@@ -51,24 +53,25 @@ class EditCost:
         int
             Total cost of node edit operations.
         """
-        cost = 0
-        source_attrs = list(nx.get_node_attributes(self.g1_nx, name='x').values())
-        target_attrs = list(nx.get_node_attributes(self.g2_nx, name='x').values())
+        cost = 0.0
+        # source_attrs = list(nx.get_node_attributes(self.g1_nx, name='x').values())
+        # target_attrs = list(nx.get_node_attributes(self.g2_nx, name='x').values())
         
         if use_attrs:
             # calculate the cost using Euclidean distance for continuous attributes
             cost += sum(
-                distance.euclidean(source_attrs[node1], target_attrs[node2]) 
+                distance.euclidean(self.g1_attrs.get(node1), self.g2_attrs.get(node2)) 
                 for node1, node2 in self.node_mapping
             )
+
         else:
             # calculate the cost using Dirac distance for one-hot encoded attributes
             cost += sum(
-                source_attrs[node1] != target_attrs[node2] 
+                self.g1_attrs.get(node1) != self.g2_attrs.get(node2)
                 for node1, node2 in self.node_mapping
             )
         
-        # add cost for unmapped nodes in the target graph
+        # Cost for each unmapped node in target
         cost += len(self.g2_unmapped_nodes)
         return cost
 
@@ -90,12 +93,14 @@ class EditCost:
                 phi_j = self.node_mapping[j][1]
 
                 if self.g1_nx.has_edge(i, j):
-                    # check for edge substitution or deletion
+                    # check for edge deletion
                     if not self.g2_nx.has_edge(phi_i, phi_j):
                         cost += 1
+                
                 elif self.g2_nx.has_edge(phi_i, phi_j):
                     # check for edge insertion
                         cost += 1
-    
+
+        # Cost for each unmapped node in target
         cost += sum([self.g2_nx.degree[x] for x in self.g2_unmapped_nodes])
         return cost
