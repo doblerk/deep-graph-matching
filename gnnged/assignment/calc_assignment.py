@@ -4,7 +4,7 @@ from typing import List
 from scipy.spatial.distance import cdist
 from scipy.optimize import linear_sum_assignment
 from ortools.graph.python import min_cost_flow
-from gnn_ged.assignment import greedy_assignment
+from gnnged.assignment import greedy_assignment
 
 class NodeAssignment:
     """
