@@ -100,4 +100,4 @@ class Model(torch.nn.Module):
         # Classify
         z = self.dense_layers(h)
 
-        return node_embeddings[-1], z #graph_pooled[-1], z
+        return node_embeddings[-1], z

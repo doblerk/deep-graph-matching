@@ -1,18 +1,20 @@
 import os
-import h5py
 import json
 import argparse
 import datetime
 import importlib
 
 import torch
-import numpy as np
 
 from time import time
 from torch.optim.lr_scheduler import StepLR
 from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
 from torch_geometric.transforms import NormalizeFeatures, Constant
+
+from gnn_ged.utils.train_utils import get_batch_size, \
+                                      get_best_trial_params, \
+                                      extract_embeddings
 
 
 def train(train_loader, device, optimizer, model, criterion):
@@ -53,40 +55,23 @@ def test(test_loader, device, model, criterion):
     return acc, loss
 
 
-@torch.no_grad()
-def extract_embeddings(dataset, device, model, args):
-    '''Extracts the node embeddings of the final layer and stores them in HDF'''
-    data_loader = DataLoader(dataset, batch_size=1, shuffle=False)
-    embeddings = list()
-    model.eval()
-    for i, data in enumerate(data_loader, start=0):
-        data = data.to(device)
-        h, _ = model(data.x, data.edge_index, data.batch)
-        embeddings.append(h.detach().cpu().numpy())
-    
-    with h5py.File(os.path.join(args.output_dir, 'node_embeddings.h5'), 'w') as f:
-        for i, mbddg in enumerate(embeddings, start=0):
-            f.create_dataset(f'embedding_{i}', data=mbddg)
-
-
-def train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, args):
+def train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, config):
     '''Trains the model, reports the accuracy and loss, and saves the last ckpt'''
     t0 = time()
 
-    for epoch in range(args.epochs):
+    for epoch in range(11):
 
         train(train_loader, device, optimizer, model, criterion)
 
-        train_accuracy, train_loss = test(train_loader, device, model, criterion)
-        test_accuracy, test_loss = test(test_loader, device, model, criterion)
-
         scheduler.step()
 
-        if epoch % 1 == 0:
+        if epoch % 10 == 0:
+            train_accuracy, train_loss = test(train_loader, device, model, criterion)
+            test_accuracy, test_loss = test(test_loader, device, model, criterion)
             print(f'Epoch {epoch:<3} | Train Loss: {train_loss:.5f} | Train Acc: {train_accuracy*100:.2f} | Test Loss: {test_loss:.5f} | Test Acc: {test_accuracy*100:.2f}')
         
         log_stats = {'Epoch': epoch, 'Train loss': train_loss, 'Train accuracy': train_accuracy, 'Test loss': test_loss, 'Test accuracy': test_accuracy}
-        with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
+        with open(os.path.join(config['output_dir'], 'log.txt'), 'a') as f:
             f.write(json.dumps(log_stats) + '\n')
     
     t1 = time()
@@ -99,43 +84,38 @@ def train_model(train_loader, test_loader, device, optimizer, model, criterion, 
         'optimizer': optimizer.state_dict(),
         'epoch': epoch + 1,
     }
-    torch.save(save_dict, os.path.join(args.output_dir, 'checkpoint.pth'))
+    torch.save(save_dict, os.path.join(config['output_dir'], 'checkpoint.pth'))
 
 
-def get_args_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset_dir', type=str, help='Path to dataset directory')
-    parser.add_argument('--dataset_name', type=str, help='Dataset name')
-    parser.add_argument('--arch', type=str, choices=['gin', 'gat', 'gcn', 'gsage'], help='GNN architecture')
-    parser.add_argument('--batch_size', type=int, default=64, help='Training batch size')
-    parser.add_argument('--hidden_dim', type=int, default=64, help='Hidden channel dimension')
-    parser.add_argument('--n_layers', type=int, default=3, help='Number of convolution layers')
-    parser.add_argument('--epochs', type=int, default=201, help='Number of epochs')
-    parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
-    parser.add_argument('--use_attrs', type=bool, default=False, help='Use node attributes')
-    parser.add_argument('--step_size', type=float, default=50, help='Scheduler step size')
-    parser.add_argument('--gamma', type=float, default=0.5, help='Multiplicative factor of learning rate decay')
-    parser.add_argument('--weight_decay', type=float, default=0.0001, help='Weight decay')
-    parser.add_argument('--indices_dir', type=str, help='Path to indices')
-    parser.add_argument('--output_dir', type=str, help='Path to output directory')
-    return parser
+# def get_args_parser():
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument('--dataset_dir', type=str, help='Path to dataset directory')
+#     parser.add_argument('--dataset_name', type=str, help='Dataset name')
+#     parser.add_argument('--arch', type=str, choices=['gin', 'gat', 'gcn', 'gsage'], help='GNN architecture')
+#     parser.add_argument('--use_attrs', type=bool, default=False, help='Use node attributes')
+#     parser.add_argument('--indices_dir', type=str, help='Path to indices')
+#     parser.add_argument('--output_dir', type=str, help='Path to output directory')
+#     return parser
 
 
-def main(args):
+def main(config):
+
+    params = get_best_trial_params(os.path.join(config['output_dir'], 'log_cv.txt'))
 
     # Write logs
-    log_args = {k:str(v) for (k,v) in sorted(dict(vars(args)).items())}
-    with open(os.path.join(args.output_dir, 'log.txt'), 'a') as f:
-        f.write(json.dumps(log_args) + '\n')
+    # log_args = {k:str(v) for (k,v) in sorted(dict(vars(args)).items())}
+    with open(os.path.join(config['output_dir'], 'log.txt'), 'a') as f:
+        # f.write(json.dumps(log_args) + '\n')
+        f.write(json.dumps(params) + '\n')
     
     # Set device to CUDA
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Load the dataset from TUDataset
-    transform = NormalizeFeatures() if args.use_attrs else None
-    dataset = TUDataset(root=args.dataset_dir,
-                        name=args.dataset_name,
-                        use_node_attr=args.use_attrs,
+    transform = NormalizeFeatures() if config['use_attrs'] else None
+    dataset = TUDataset(root=config['dataset_dir'],
+                        name=config['dataset_name'],
+                        use_node_attr=config['use_attrs'],
                         transform=transform)
     
     # Check if the data set contains unlabelled nodes
@@ -143,49 +123,51 @@ def main(args):
         dataset.transform = Constant(value=1.0)
     
     # Load the train and test indices
-    with open(os.path.join(args.indices_dir, 'train_indices.json'), 'r') as fp:
+    with open(os.path.join(config['indices_dir'], 'train_indices.json'), 'r') as fp:
         train_idx = json.load(fp)
     
-    with open(os.path.join(args.indices_dir, 'test_indices.json'), 'r') as fp:
+    with open(os.path.join(config['indices_dir'], 'test_indices.json'), 'r') as fp:
         test_idx = json.load(fp)
 
     # Prepare the data
     train_dataset, test_dataset = dataset[train_idx], dataset[test_idx]
+
+    batch_size = get_batch_size(len(train_dataset))
     
     train_loader = DataLoader(
             dataset=train_dataset,
-            batch_size=args.batch_size,
+            batch_size=batch_size,
             shuffle=True,
     )
     
     test_loader = DataLoader(
             dataset=test_dataset,
-            batch_size=args.batch_size,
+            batch_size=len(test_dataset),
             shuffle=False,
     )
     
     # Initialize the model
-    model_module = importlib.import_module(f'gnn_ged.models.{args.arch}')
+    model_module = importlib.import_module(f"gnn_ged.models.{config['arch']}")
     model = model_module.Model(
             input_dim=dataset.num_features,
-            hidden_dim=args.hidden_dim,
+            hidden_dim=params['hidden_dim'],
             n_classes=dataset.num_classes,
-            n_layers=args.n_layers,
+            n_layers=params['num_layers'],
     ).to(device)
 
     # Define the optimizer and criterion
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
     criterion = torch.nn.CrossEntropyLoss()
-    scheduler = StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
+    scheduler = StepLR(optimizer, step_size=params['step_size'], gamma=params['gamma'])
 
     # Train the model
-    train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, args)
+    train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, config)
     
     # Extract the embeddings
-    extract_embeddings(dataset, device, model, args)
+    extract_embeddings(dataset, device, model, config)
 
 
 if __name__ == '__main__':
-    parser = get_args_parser()
-    args = parser.parse_args()
-    main(args)
+    with open('params.json', 'r') as f:
+        config = json.load(f)
+    main(config)

@@ -1,7 +1,7 @@
 import os
 import json
 import h5py
-import argparse
+import logging
 import numpy as np
 
 from time import time
@@ -13,6 +13,16 @@ from torch_geometric.transforms import NormalizeFeatures, Constant
 
 from gnn_ged.assignment.calc_assignment import NodeAssignment
 from gnn_ged.edit_cost.calc_edit_cost import EditCost
+
+
+logging.basicConfig(
+    level=logging.INFO,  # Or DEBUG, WARNING, ERROR
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("run_matching.log"),
+        logging.StreamHandler()
+    ]
+)
 
 
 def load_dataset(config):
@@ -43,6 +53,7 @@ def calc_matrix_distances(config):
 
     matrix_distances = np.zeros(shape=(len(node_embeddings), len(node_embeddings)), dtype=np.int32)
     
+    logging.info("Starting distance computation...")
     t0 = time()
 
     for i, j in combinations(list(range(len(dataset_nx))), r=2):
@@ -89,21 +100,11 @@ def calc_matrix_distances(config):
     t1 = time()
     computation_time = t1 - t0
     
-    with open(os.path.join(config['output_dir'], 'computation_time.txt'), 'a') as file:
-        file.write(f"Computation time for {config['method']} : {computation_time}\n")
+    # with open(os.path.join(config['output_dir'], 'computation_time.txt'), 'a') as file:
+    #     file.write(f"Computation time for {config['method']} : {computation_time}\n")
+    logging.info(f"Computation time for {config['method']}: {computation_time:.2f} seconds")
     
-    np.save(os.path.join(config['output_dir'], f"distances_{config['method']}.npy"), matrix_distances)
-
-
-# def get_args_parser():
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument('--dataset_dir', type=str, help='Path to dataset')
-#     parser.add_argument('--dataset_name', type=str, help='Dataset name')
-#     parser.add_argument('--node_embeddings', type=str, help='Path to node embeddings file')
-#     parser.add_argument('--use_attrs', type=bool, default=False, help='Use node attributes')
-#     parser.add_argument('--output_dir', type=str, help='Path to output directory')
-#     parser.add_argument('--method', type=str, choices=['lsap', 'greedy', 'flow'], default='lsap', help='Assignment method')
-#     return parser
+    # np.save(os.path.join(config['output_dir'], f"distances_{config['method']}.npy"), matrix_distances)
 
 
 def main(config):
