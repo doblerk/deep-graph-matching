@@ -1,6 +1,5 @@
 #  GNN-GED Framework
-
-This repository contains the implementation of GNN-GED framework to perform graph matching learning with graph neural networks.
+This repository contains the implementation of a GNN-based framework to derive graph edit distance.
 
 ## Folder structure
 ```bash
@@ -9,14 +8,17 @@ This repository contains the implementation of GNN-GED framework to perform grap
 │       └── MUTAG
 │           └── raw
 │
-├── gnn_ged
+├── gnnged
 │   ├── assignment
 │   ├── edit_cost
 │   ├── evaluation
+|   ├── heuristics
 │   ├── models
 │   ├── training
 │   └── utils
 │
+├── scripts
+|
 ├── src
 │   └── build
 │ 
@@ -50,18 +52,24 @@ python3 -m pip install -e .
 
 ## How to use
 
-#### Train a GNN model
+#### Split the data set
 ```bash
 # Split the data set
-python3 gnn_ged/utils/split_dataset.py --dataset_dir data/TUDataset/ --dataset_name MUTAG --output_dir res/MUTAG/
+python3 gnnged/utils/split_dataset.py --dataset_dir data/TUDataset/ --dataset_name MUTAG --output_dir res/MUTAG/
+```
+
+#### Train a GNN model
+```bash
+# Finetune the model
+python3 scripts/run_finetuning.py
 
 # Train the model
-python3 gnn_ged/training/train_model.py --dataset_dir data/TUDataset --dataset_name MUTAG --arch gin --indices_dir res/MUTAG --output_dir res/MUTAG/GIN/raw/
+python3 scripts/run_training.py
 ```
 
 #### Compute GED
 ```bash
-python3 main.py --dataset_dir data/TUDataset/ --dataset_name MUTAG --output_dir res/MUTAG/GIN/raw/
+python3 scripts/run_matching.py
 ```
 
 #### Classify graphs
