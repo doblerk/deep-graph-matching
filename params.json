@@ -1,9 +1,0 @@
-{
-    "dataset_dir": "data/TUDataset/",
-    "dataset_name": "MUTAG",
-    "indices_dir": "/home/dobleraemon/Downloads/res_mutag/",
-    "output_dir": "/home/dobleraemon/Downloads/res_mutag/",
-    "arch": "gin",
-    "use_attrs": false,
-    "method": "lsap"
-}

@@ -17,6 +17,7 @@ tests/__pycache__/
 res/
 src/build/
 gnnged/assignment/greedy_assignment*
+params.json
 
 # Miscellaneous
-gnn_ged.egg-info
+*.egg-info
