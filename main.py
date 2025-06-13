@@ -11,8 +11,8 @@ from torch_geometric.utils import to_networkx
 from torch_geometric.datasets import TUDataset
 from torch_geometric.transforms import NormalizeFeatures, Constant
 
-from gnn_ged.assignment.calc_assignment import NodeAssignment
-from gnn_ged.edit_cost.calc_edit_cost import EditCost
+from gnnged.assignment.calc_assignment import NodeAssignment
+from gnnged.edit_cost.calc_edit_cost import EditCost
 
 
 def load_dataset(config):
