@@ -1,12 +1,14 @@
-import os
+import sys
 import json
-import argparse
+import logging
 import torch
 import importlib
 import torch
 import optuna
 
 import numpy as np
+
+from pathlib import Path
 
 from sklearn.model_selection import StratifiedKFold
 from torch.optim.lr_scheduler import StepLR
@@ -79,14 +81,16 @@ def objective(trial):
     transform = NormalizeFeatures() if config['use_attrs'] else None
     dataset = TUDataset(root=config['dataset_dir'],
                         name=config['dataset_name'],
-                        use_node_attr=config['use_attrs'],
+                        use_node_attr=config.get('use_attrs', False),
                         transform=transform)
+    logging.info(f"Dataset loaded: {config['dataset_name']} with {len(dataset)} samples.")
     
-    # Check if the data set contains unlabelled nodes
-    if 'x' not in dataset[0]:
+    # Check for unlabelled nodes
+    if not hasattr(dataset[0], 'x') or dataset[0].x is None:
         dataset.transform = Constant(value=1.0)
+        logging.info("Dataset missing node features 'x', applied Constant transform.")
 
-    with open(os.path.join(config['indices_dir'], 'train_indices.json'), 'r') as fp:
+    with open(Path(config['output_dir']) / 'train_indices.json', 'r') as fp:
         train_idx = json.load(fp)
 
     train_labels = [dataset[i].y.item() for i in train_idx]
@@ -117,7 +121,7 @@ def objective(trial):
             )
         
         # Initialize the model
-        model_module = importlib.import_module(f"gnn_ged.models.{config['arch']}")
+        model_module = importlib.import_module(f"gnnged.models.{config['arch']}")
         model = model_module.Model(
                 input_dim=dataset.num_features,
                 hidden_dim=hidden_dim,
@@ -148,61 +152,57 @@ def objective(trial):
     return np.mean(val_accuracies)
 
 
-# def get_args_parser():
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument('--dataset_dir', type=str, help='Path to dataset directory')
-#     parser.add_argument('--dataset_name', type=str, help='Dataset name')
-#     parser.add_argument('--arch', type=str, choices=['gin', 'gat', 'gcn', 'gsage'], help='GNN architecture')
-#     parser.add_argument('--use_attrs', type=bool, default=False, help='Use node attributes')
-#     parser.add_argument('--indices_dir', type=str, help='Path to indices')
-#     parser.add_argument('--output_dir', type=str, help='Path to output directory')
-#     return parser
-
-
 def main(config):
 
-    # Create Optuna study and optimize
+    output_dir = Path(config['output_dir']) / config['arch']
+    output_dir.mkdir(parents=True, exist_ok=True)
+    log_file = output_dir / "log_finetuning.txt"
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(log_file, mode="a"),
+            logging.StreamHandler()
+        ]
+    )
+
+    logging.info("Starting Optuna study...")
     study = optuna.create_study(direction='maximize')
     study.optimize(objective, n_trials=1, timeout=82800) # Number of trials
 
     pruned_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]
     complete_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
 
-    print("Study statistics: ")
-    print("  Number of finished trials: ", len(study.trials))
-    print("  Number of pruned trials: ", len(pruned_trials))
-    print("  Number of complete trials: ", len(complete_trials))
+    logging.info("Study statistics:")
+    logging.info(f"  Number of finished trials: {len(study.trials)}")
+    logging.info(f"  Number of pruned trials: {len(pruned_trials)}")
+    logging.info(f"  Number of complete trials: {len(complete_trials)}")
 
-    best_params = study.best_params
-    print("Best hyperparameters:", best_params)
-
-    print("Best trial:")
     best_trial = study.best_trial
-
-    print("  Value: ", best_trial.value)
-
-    print("  Params: ")
+    logging.info("Best trial:")
+    logging.info(f"  Value: {best_trial.value}")
+    logging.info("  Params:")
     for key, value in best_trial.params.items():
-        print("    {}: {}".format(key, value))
+        logging.info(f"    {key}: {value}")
 
     best_val_accuracies = best_trial.user_attrs['val_accuracies']
-    print(best_val_accuracies)
+    logging.info(f"Validation accuracies: {best_val_accuracies}")
+
+    best_val_accuracies = best_trial.user_attrs['val_accuracies']
+
     mean_accuracy = np.mean(best_val_accuracies)
     std_accuracy = np.std(best_val_accuracies)
 
-    print(f'Mean k-fold CV accuracy: {mean_accuracy:.4f}')
-    print(f'Standard deviation of k-fold CV accuracy: {std_accuracy:.4f}')
-
-    with open(os.path.join(config['output_dir'], 'log_cv.txt'), 'a') as file:
-        file.write(f"lr: {best_trial.params['lr']}\n")
-        file.write(f"weight_decay: {best_trial.params['weight_decay']}\n")
-        file.write(f"hidden_dim: {best_trial.params['hidden_dim']}\n")
-        file.write(f"num_layers: {best_trial.params['num_layers']}\n")
-        file.write(f"step_size: {best_trial.params['step_size']}\n")
-        file.write(f"gamma: {best_trial.params['gamma']}\n")
-
+    logging.info(f"Mean k-fold CV accuracy: {mean_accuracy:.4f}")
+    logging.info(f"Standard deviation of k-fold CV accuracy: {std_accuracy:.4f}")
+    
+    best_params_file = output_dir / 'best_params.json'
+    with open(best_params_file, 'w') as f:
+        json.dump(best_trial.params, f, indent=2)
+        
 
 if __name__ == '__main__':
-    with open('params.json', 'r') as f:
+    config_file = sys.argv[1] if len(sys.argv) > 1 else 'params.json'
+    with open(config_file, 'r') as f:
         config = json.load(f)
     main(config)

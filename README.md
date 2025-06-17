@@ -34,28 +34,40 @@ This repository contains the implementation of a GNN-based framework to derive g
 ## Installation
 
 #### Prerequisites
- - Python 3.10
+ - Python >= 3.10
+ - PyTorch & torch-geometric (see installation below)
 
 #### Install
 ```bash
-# Create virtual environment
-python3.10 -m venv venv
+# 1. Create and activate virtual environment
+python3 -m venv venv
 source venv/bin/activate
 
-# Check your CUDA configuration and install required packages
+# 2. Install PyTorch and torch-geometric (CUDA 12.4 shown, adjust if needed)
 pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 pip3 install torch_geometric
+pip3 install pybind11
 
-# Install the Python package
+# Install the package in editable/development mode
 python3 -m pip install -e .
 ```
 
-## How to use
+## Usage
+
+#### Run scripts with JSON parameter files
+```json
+{
+    "dataset_dir": "data/TUDataset",
+    "dataset_name": "MUTAG",
+    "output_dir": "./res/MUTAG/",
+    "use_attrs": false,
+}
+```
 
 #### Split the data set
 ```bash
 # Split the data set
-python3 gnnged/utils/split_dataset.py --dataset_dir data/TUDataset/ --dataset_name MUTAG --output_dir res/MUTAG/
+python3 scripts/run_preprocessing.py
 ```
 
 #### Train a GNN model

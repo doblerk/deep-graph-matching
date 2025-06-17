@@ -1,11 +1,11 @@
-import os
+import sys
 import json
-import argparse
+import logging
 import datetime
 import importlib
-
 import torch
 
+from pathlib import Path
 from time import time
 from torch.optim.lr_scheduler import StepLR
 from torch_geometric.loader import DataLoader
@@ -13,8 +13,8 @@ from torch_geometric.datasets import TUDataset
 from torch_geometric.transforms import NormalizeFeatures, Constant
 
 from gnnged.utils.train_utils import get_batch_size, \
-                                      get_best_trial_params, \
-                                      extract_embeddings
+                                     get_best_trial_params, \
+                                     extract_embeddings
 
 
 def train(train_loader, device, optimizer, model, criterion):
@@ -55,119 +55,133 @@ def test(test_loader, device, model, criterion):
     return acc, loss
 
 
-def train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, config):
-    '''Trains the model, reports the accuracy and loss, and saves the last ckpt'''
+def train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, config, output_dir):
+    '''Trains the model, reports accuracy and loss, saves checkpoint, and logs stats'''
+
     t0 = time()
 
-    for epoch in range(11):
-
+    for epoch in range(1):
         train(train_loader, device, optimizer, model, criterion)
-
         scheduler.step()
 
         if epoch % 10 == 0:
             train_accuracy, train_loss = test(train_loader, device, model, criterion)
             test_accuracy, test_loss = test(test_loader, device, model, criterion)
-            print(f'Epoch {epoch:<3} | Train Loss: {train_loss:.5f} | Train Acc: {train_accuracy*100:.2f} | Test Loss: {test_loss:.5f} | Test Acc: {test_accuracy*100:.2f}')
-        
-        log_stats = {'Epoch': epoch, 'Train loss': train_loss, 'Train accuracy': train_accuracy, 'Test loss': test_loss, 'Test accuracy': test_accuracy}
-        with open(os.path.join(config['output_dir'], 'log.txt'), 'a') as f:
-            f.write(json.dumps(log_stats) + '\n')
+            
+            log_stats = {
+                'Epoch': epoch,
+                'Train loss': train_loss,
+                'Train accuracy': train_accuracy,
+                'Test loss': test_loss,
+                'Test accuracy': test_accuracy
+            }
+            logging.info(json.dumps(log_stats))
     
     t1 = time()
     computation_time = str(datetime.timedelta(seconds=int(t1 - t0)))
-    print(f'Training time {computation_time}')
+    logging.info(f'Training completed in {computation_time}')
 
-    # Save the model
+    # Save the model checkpoint
+    checkpoint_path = output_dir / 'checkpoint.pth'
     save_dict = {
         'model_state_dict': model.state_dict(),
         'optimizer': optimizer.state_dict(),
         'epoch': epoch + 1,
     }
-    torch.save(save_dict, os.path.join(config['output_dir'], 'checkpoint.pth'))
-
-
-# def get_args_parser():
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument('--dataset_dir', type=str, help='Path to dataset directory')
-#     parser.add_argument('--dataset_name', type=str, help='Dataset name')
-#     parser.add_argument('--arch', type=str, choices=['gin', 'gat', 'gcn', 'gsage'], help='GNN architecture')
-#     parser.add_argument('--use_attrs', type=bool, default=False, help='Use node attributes')
-#     parser.add_argument('--indices_dir', type=str, help='Path to indices')
-#     parser.add_argument('--output_dir', type=str, help='Path to output directory')
-#     return parser
+    torch.save(save_dict, checkpoint_path)
+    logging.info(f'Model checkpoint saved at {checkpoint_path}')
 
 
 def main(config):
+    # Setup logging
+    output_dir = Path(config['output_dir']) / config['arch']
+    output_dir.mkdir(parents=True, exist_ok=True)
+    log_file = output_dir / 'log_training.txt'
 
-    params = get_best_trial_params(os.path.join(config['output_dir'], 'log_cv.txt'))
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file, mode='a'),
+            logging.StreamHandler()
+        ]
+    )
 
-    # Write logs
-    # log_args = {k:str(v) for (k,v) in sorted(dict(vars(args)).items())}
-    with open(os.path.join(config['output_dir'], 'log.txt'), 'a') as f:
-        # f.write(json.dumps(log_args) + '\n')
-        f.write(json.dumps(params) + '\n')
+    best_params_file = output_dir / 'best_params.json'
+    with open(best_params_file, 'r') as f:
+        params = json.load(f)
+
+    # Log params as JSON string
+    logging.info("Best trial params: %s", json.dumps(params))
     
     # Set device to CUDA
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    logging.info(f'Using device: {device}')
 
     # Load the dataset from TUDataset
     transform = NormalizeFeatures() if config['use_attrs'] else None
     dataset = TUDataset(root=config['dataset_dir'],
                         name=config['dataset_name'],
-                        use_node_attr=config['use_attrs'],
+                        use_node_attr=config.get('use_attrs', False),
                         transform=transform)
+    logging.info(f"Dataset loaded: {config['dataset_name']} with {len(dataset)} samples.")
     
-    # Check if the data set contains unlabelled nodes
-    if 'x' not in dataset[0]:
+    # Check for unlabelled nodes
+    if not hasattr(dataset[0], 'x') or dataset[0].x is None:
         dataset.transform = Constant(value=1.0)
+        logging.info("Dataset missing node features 'x', applied Constant transform.")
     
     # Load the train and test indices
-    with open(os.path.join(config['indices_dir'], 'train_indices.json'), 'r') as fp:
+    with open(Path(config['output_dir']) / 'train_indices.json', 'r') as fp:
         train_idx = json.load(fp)
-    
-    with open(os.path.join(config['indices_dir'], 'test_indices.json'), 'r') as fp:
+    with open(Path(config['output_dir']) / 'test_indices.json', 'r') as fp:
         test_idx = json.load(fp)
+    logging.info(f'Loaded train/test indices: {len(train_idx)}/{len(test_idx)}')
 
-    # Prepare the data
-    train_dataset, test_dataset = dataset[train_idx], dataset[test_idx]
+    # Prepare datasets and loaders
+    train_dataset = dataset[train_idx]
+    test_dataset = dataset[test_idx]
 
     batch_size = get_batch_size(len(train_dataset))
-    
     train_loader = DataLoader(
             dataset=train_dataset,
             batch_size=batch_size,
             shuffle=True,
     )
-    
     test_loader = DataLoader(
             dataset=test_dataset,
             batch_size=len(test_dataset),
             shuffle=False,
     )
-    
-    # Initialize the model
-    model_module = importlib.import_module(f"gnn_ged.models.{config['arch']}")
+    logging.info(f'Train loader batch size: {batch_size}, Test loader batch size: {len(test_dataset)}')
+
+    # Initialize model dynamically
+    model_module = importlib.import_module(f"gnnged.models.{config['arch']}")
     model = model_module.Model(
             input_dim=dataset.num_features,
             hidden_dim=params['hidden_dim'],
             n_classes=dataset.num_classes,
             n_layers=params['num_layers'],
     ).to(device)
+    logging.info(f'Model initialized: {config["arch"]}')
 
-    # Define the optimizer and criterion
+    # Setup optimizer, criterion, scheduler
     optimizer = torch.optim.Adam(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
     criterion = torch.nn.CrossEntropyLoss()
     scheduler = StepLR(optimizer, step_size=params['step_size'], gamma=params['gamma'])
+    logging.info('Optimizer, criterion, and scheduler initialized.')
 
     # Train the model
-    train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, config)
+    train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, config, output_dir)
+    logging.info('Training completed.')
     
     # Extract the embeddings
     extract_embeddings(dataset, device, model, config)
+    logging.info('Embeddings extraction completed.')
 
 
 if __name__ == '__main__':
-    with open('params.json', 'r') as f:
+    config_file = sys.argv[1] if len(sys.argv) > 1 else 'params.json'
+    with open(config_file, 'r') as f:
         config = json.load(f)
     main(config)
