@@ -1,9 +1,10 @@
-import os
+import sys
 import json
 import h5py
 import logging
 import numpy as np
-
+import networkx as nx
+from pathlib import Path
 from time import time
 from itertools import combinations
 
@@ -15,96 +16,53 @@ from gnnged.assignment.calc_assignment import NodeAssignment
 from gnnged.edit_cost.calc_edit_cost import EditCost
 
 
-logging.basicConfig(
-    level=logging.INFO,  # Or DEBUG, WARNING, ERROR
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("run_matching.log"),
-        logging.StreamHandler()
-    ]
-)
-
-
-def load_dataset(config):
-    """Loads the dataset from TUDataset and converts it into NetworkX"""
-    transform = NormalizeFeatures() if config['use_attrs'] else None
-    dataset = TUDataset(root=config['dataset_dir'],
-                        name=config['dataset_name'],
-                        use_node_attr=config['use_attrs'],
-                        transform=transform)
-    if 'x' not in dataset[0]:
-        dataset.transform = Constant(value=1.0)
-    dataset_nx = {i:to_networkx(dataset[i], node_attrs='x', to_undirected=True) for i in range(len(dataset))}
-    return dataset_nx
-
-
-def load_embeddings(config, dataset_size):
-    """Loads the train and test embeddings"""
-    with h5py.File(os.path.join(config['output_dir'], 'node_embeddings.h5'), 'r') as f:
-        node_embeddings = {i:np.array(f[f'embedding_{i}']) for i in range(dataset_size)}
-    return node_embeddings
-
-
-def calc_matrix_distances(config):
+def calc_matrix_distances(dataset_nx: dict[int, nx.Graph], node_embeddings: dict[int, np.ndarray], output_dir: Path):
     """Calculates the matrix of distances"""
-    dataset_nx = load_dataset(config)
-    
-    node_embeddings = load_embeddings(config, len(dataset_nx))
-
-    matrix_distances = np.zeros(shape=(len(node_embeddings), len(node_embeddings)), dtype=np.int32)
+    n = len(dataset_nx)
+    matrix_distances = np.zeros(shape=(n, n), dtype=np.int32)
     
     logging.info("Starting distance computation...")
     t0 = time()
 
-    for i, j in combinations(list(range(len(dataset_nx))), r=2):
-
+    for i, j in combinations(list(range(n)), r=2):
         g1_nx = dataset_nx[i]
         g2_nx = dataset_nx[j]
 
         if g1_nx.number_of_nodes() <= g2_nx.number_of_nodes():
             # heuristic -> the smaller graph is always the source graph
-            source_embedding = node_embeddings[i]
-            target_embedding = node_embeddings[j]
-            source_graph = g1_nx
-            target_graph = g2_nx
+            source_embedding, target_embedding = node_embeddings[i], node_embeddings[j]
+            source_graph, target_graph = g1_nx, g2_nx
         else:
-            source_embedding = node_embeddings[j]
-            target_embedding = node_embeddings[i]
-            source_graph = g2_nx
-            target_graph = g1_nx
+            source_embedding, target_embedding = node_embeddings[j], node_embeddings[i]
+            source_graph, target_graph = g2_nx, g1_nx
 
         node_assignment = NodeAssignment(source_embedding, target_embedding)
-
         cost_matrix = node_assignment.calc_cost_matrix()
 
-        match config['method']:
-
+        method = config['method']
+        match method:
             case 'lsap':
                 assignment = node_assignment.calc_linear_sum_assignment(cost_matrix)
-            
             case 'greedy':
                 assignment = node_assignment.calc_greedy_assignment(cost_matrix)
-            
             case 'flow':
                 assignment = node_assignment.calc_min_cost_flow(cost_matrix)
         
         edit_cost = EditCost(assignment, source_graph, target_graph)
-
         node_cost = edit_cost.compute_cost_node_edit(use_attrs=config['use_attrs'])
         edge_cost = edit_cost.compute_cost_edge_edit()
-        
-        matrix_distances[i,j] = node_cost + edge_cost
+
+        total_cost = node_cost + edge_cost
+        matrix_distances[i,j] = total_cost
 
     matrix_distances += matrix_distances.T
 
-    t1 = time()
-    computation_time = t1 - t0
+    duration = time() - t0
+    logging.info(f"Finished computation in {duration} seconds for method {method}")
     
-    # with open(os.path.join(config['output_dir'], 'computation_time.txt'), 'a') as file:
-    #     file.write(f"Computation time for {config['method']} : {computation_time}\n")
-    logging.info(f"Computation time for {config['method']}: {computation_time:.2f} seconds")
-    
-    # np.save(os.path.join(config['output_dir'], f"distances_{config['method']}.npy"), matrix_distances)
+    distance_file = output_dir / f'distances_{method}.npy'
+    np.save(distance_file, matrix_distances)
+    logging.info(f"Saved distance matrix to {distance_file.resolve()}")
 
 
 def main(config):
@@ -114,10 +72,43 @@ def main(config):
     Config:
         config: command-line arguments.
     """
-    calc_matrix_distances(config)
+    # Setup logging
+    output_dir = Path(config['output_dir']) / config['arch']
+    output_dir.mkdir(parents=True, exist_ok=True)
+    log_file = output_dir / 'log_matching.txt'
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler()
+        ]
+    )
+
+    # Load the dataset from TUDataset
+    transform = NormalizeFeatures() if config['use_attrs'] else None
+    dataset = TUDataset(root=config['dataset_dir'],
+                        name=config['dataset_name'],
+                        use_node_attr=config.get('use_attrs', False),
+                        transform=transform)
+    dataset_nx = {i:to_networkx(dataset[i], node_attrs='x', to_undirected=True) for i in range(len(dataset))}
+
+    # Load the node embeddings
+    output_dir = Path(config['output_dir']) / config['arch']
+    with h5py.File(output_dir / 'node_embeddings.h5', 'r') as f:
+        node_embeddings = {i:np.array(f[f'embedding_{i}']) for i in range(len(dataset_nx))}
+    
+    # Check for unlabelled nodes
+    if not hasattr(dataset[0], 'x') or dataset[0].x is None:
+        dataset.transform = Constant(value=1.0)
+    
+    # Compute the distances
+    calc_matrix_distances(dataset_nx, node_embeddings, output_dir)
 
 
 if __name__ == '__main__':
-    with open('params.json', 'r') as f:
+    config_file = sys.argv[1] if len(sys.argv) > 1 else 'params.json'
+    with open(config_file, 'r') as f:
         config = json.load(f)
     main(config)

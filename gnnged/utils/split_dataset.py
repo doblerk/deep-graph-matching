@@ -1,24 +1,15 @@
 import os
+import sys
 import json
-import argparse
-
+from pathlib import Path
 import numpy as np
-
 from torch_geometric.datasets import TUDataset
 
 
-def get_args_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset_dir', type=str, help='Path to dataset directory')
-    parser.add_argument('--dataset_name', type=str, help='Dataset name')
-    parser.add_argument('--output_dir', type=str, help='Path to output directory')
-    return parser
-
-
-def main(args):
+def main(config):
 
     # Load the dataset from TUDataset
-    dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
+    dataset = TUDataset(root=config["dataset_dir"], name=config["dataset_name"])
     
     # Shuffle the indices
     dataset_idx = list(range(len(dataset)))
@@ -27,16 +18,26 @@ def main(args):
     # Split the dataset as 80-20 train and test
     train_idx = sorted(dataset_idx[:int(len(dataset)*0.8)])
     test_idx = sorted(dataset_idx[int(len(dataset)*0.8):])
+
+    output_dir = Path(config["output_dir"])
+    output_dir.mkdir(parents=True, exist_ok=True)
     
     # Save the indices
-    with open(os.path.join(args.output_dir, 'train_indices.json'), 'w') as fp:
+    with open(output_dir / 'train_indices.json', 'w') as fp:
         json.dump(train_idx, fp)
     
-    with open(os.path.join(args.output_dir, 'test_indices.json'), 'w') as fp:
+    with open(output_dir / 'test_indices.json', 'w') as fp:
         json.dump(test_idx, fp)
 
 
 if __name__ == '__main__':
-    parser = get_args_parser()
-    args = parser.parse_args()
-    main(args)
+    config_path = sys.argv[1] if len(sys.argv) > 1 else 'params.json'
+
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"Failed to load config file '{config_path}': {e}")
+        sys.exit(1)
+
+    main(config)

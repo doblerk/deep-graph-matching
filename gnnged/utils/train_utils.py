@@ -1,6 +1,6 @@
-import os
 import h5py
 import torch
+from pathlib import Path
 from torch_geometric.loader import DataLoader
 from typing import Tuple
 
@@ -45,6 +45,7 @@ def extract_embeddings(dataset, device, model, config):
         h, _ = model(data.x, data.edge_index, data.batch)
         embeddings.append(h.detach().cpu().numpy())
     
-    with h5py.File(os.path.join(config['output_dir'], 'node_embeddings.h5'), 'w') as f:
+    output_file = Path(config['output_dir']) / config['arch'] / 'node_embeddings.h5'
+    with h5py.File(output_file, 'w') as f:
         for i, mbddg in enumerate(embeddings, start=0):
             f.create_dataset(f'embedding_{i}', data=mbddg)
