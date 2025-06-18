@@ -1,5 +1,5 @@
 #  GNN-GED Framework
-This repository contains the implementation of a GNN-based framework to derive graph edit distance.
+This repository contains an implementation of a GNN-based framework to derive graph edit operations.
 
 ## Folder structure
 ```bash
@@ -46,7 +46,6 @@ source venv/bin/activate
 # 2. Install PyTorch and torch-geometric (CUDA 12.4 shown, adjust if needed)
 pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 pip3 install torch_geometric
-pip3 install pybind11
 
 # Install the package in editable/development mode
 python3 -m pip install -e .
@@ -81,12 +80,14 @@ python3 scripts/run_training.py
 
 #### Compute GED
 ```bash
+# Compute distances
 python3 scripts/run_matching.py
 ```
 
 #### Classify graphs
 ```bash
-python3 gnn_ged/evaluation/graph_classification.py --distance_matrix res/MUTAG/GIN/raw/all_distances.npy --indices_dir res/MUTAG/ --dataset_dir data/TUDataset/ --dataset_name MUTAG
+# Classify graphs
+python3 scripts/run_evaluation.py
 ```
 
 ## Further information

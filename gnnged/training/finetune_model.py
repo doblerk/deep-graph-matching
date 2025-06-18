@@ -153,9 +153,9 @@ def objective(trial):
 
 
 def main(config):
-
     output_dir = Path(config['output_dir']) / config['arch']
     output_dir.mkdir(parents=True, exist_ok=True)
+    
     log_file = output_dir / "log_finetuning.txt"
     logging.basicConfig(
         level=logging.INFO,

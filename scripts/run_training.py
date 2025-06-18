@@ -1,5 +1,4 @@
 import subprocess
-from gnnged.training.train_model import main
 
 
 def main():

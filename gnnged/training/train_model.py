@@ -4,17 +4,13 @@ import logging
 import datetime
 import importlib
 import torch
-
-from pathlib import Path
 from time import time
+from pathlib import Path
 from torch.optim.lr_scheduler import StepLR
 from torch_geometric.loader import DataLoader
 from torch_geometric.datasets import TUDataset
 from torch_geometric.transforms import NormalizeFeatures, Constant
-
-from gnnged.utils.train_utils import get_batch_size, \
-                                     get_best_trial_params, \
-                                     extract_embeddings
+from gnnged.utils.train_utils import get_batch_size, extract_embeddings
 
 
 def train(train_loader, device, optimizer, model, criterion):
@@ -77,9 +73,8 @@ def train_model(train_loader, test_loader, device, optimizer, model, criterion, 
             }
             logging.info(json.dumps(log_stats))
     
-    t1 = time()
-    computation_time = str(datetime.timedelta(seconds=int(t1 - t0)))
-    logging.info(f'Training completed in {computation_time}')
+    duration = time() - t0
+    logging.info(f'Training completed in {duration} seconds')
 
     # Save the model checkpoint
     checkpoint_path = output_dir / 'checkpoint.pth'
@@ -93,11 +88,10 @@ def train_model(train_loader, test_loader, device, optimizer, model, criterion, 
 
 
 def main(config):
-    # Setup logging
     output_dir = Path(config['output_dir']) / config['arch']
     output_dir.mkdir(parents=True, exist_ok=True)
+    
     log_file = output_dir / 'log_training.txt'
-
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
