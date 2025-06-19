@@ -14,15 +14,18 @@ from scipy.spatial import ConvexHull
 from scipy.spatial.distance import euclidean, pdist, squareform
 
 
-class ConvexHullChild(ConvexHull):
+class ConvexHullBase(ConvexHull):
 
     def __init__(self, points):
-        ConvexHull.__init__(self, points, qhull_options='QJ')
+        super().__init__(self, points, qhull_options='QJ')
+        self.points = points
+        self._dimension = points.shape[1]
+        self._volume = self.volume  # Area in 2D, volume in 3D
         self._centroid = None
-        self._perimeter = None
-        self._volume = self.volume
         self._diameter = None
-
+        self._perimeter = None
+        self._pca = None
+        
     def calc_centroid(self):
         if self._centroid is None:
             self._centroid = [
@@ -35,6 +38,7 @@ class ConvexHullChild(ConvexHull):
         return len(self.vertices)
 
     def calc_perimeter(self):
+        # Note: in dimension > 2, this is a looped sum of vertex distances, not the true surface perimeter
         if self._perimeter is None:
             vertices = self.vertices.tolist() + [self.vertices[0]]
             self._perimeter = sum(
@@ -51,6 +55,40 @@ class ConvexHullChild(ConvexHull):
                 pdist(self.points[self.vertices], metric='euclidean')
             )
         return self._diameter
+    
+    def calc_compactness(self):
+        if self.points.shape[1] == 2:
+            # compactness for 2D shape
+            compactness = ( 4 * np.pi ) / self._perimeter ** 2
+        elif self.points.shape[1] == 3:
+            # compacness for 3D shape
+            compactness = self._volume ** 2 / 
+        else:
+            raise ValueError("Not supported for dimension > 3.")
+        return compactness
+    
+    def calc_elongation(self):
+        self._compute_pca()
+        axis_lengths = np.sqrt(self._pca.explained_variance_)
+        return axis_lengths[0] / axis_lengths[-1] if axis_lengths[-1] > 0 else float('inf')
+    
+    def calc_spatial_distribution(self):
+        distances = np.linalg.norm(self.points - self._centroid, axis=1)
+        return np.mean(distances)
+    
+    def _compute_pca(self):
+        if self._pca is None:
+            self._pca = PCA(n_components=self.points.shape[1])
+            self._pca.fit(self.points[self.vertices])
+    
+    def calc_major_minor_axes(self):
+        self._compute_pca()
+        axis_lengths = np.sqrt(self._pca.explained_variance_)
+        axis_directions = self._pca.components_
+        return {
+            'axis_lengths': axis_lengths,         # e.g., [major, ..., minor]
+            'axis_directions': axis_directions    # unit vectors for each axis
+        }
 
     def calc_isoperimetric_quotient(self):
         perimeter = self.calc_perimeter()
@@ -60,9 +98,8 @@ class ConvexHullChild(ConvexHull):
         return area / area_circle
 
     def calc_minimum_bounding_sphere(self):
-        dimension = self.points.shape[1]
         radius = self.calc_diameter() / 2
-        n_sphere_volume = (np.pi ** (dimension / 2) * radius ** dimension) / gamma((dimension / 2) + 1)
+        n_sphere_volume = (np.pi ** (self._dimension / 2) * radius ** self._dimension) / gamma((self._dimension / 2) + 1)
         compactness = self.calc_volume() / n_sphere_volume if n_sphere_volume > 0 else 0
         return {
             'sphere_radius': radius,
@@ -121,6 +158,34 @@ class ConvexHullChild(ConvexHull):
         if config.get('use_rel_spatial', True):
             feats.append(self.calc_relative_spatial())
         return feats
+
+
+class ConvexHull2D(ConvexHullBase):
+    
+    def __init__(self, points):
+        super().__init__(points, qhull_options='QJ')
+        self.points = points
+        self._area = self._volume
+    
+    def calc_circularity(self):
+        perimeter = self.calc_perimeter()
+        return (4 * np.pi * self._area) / (perimeter ** 2)
+    
+    def calc_eccentricity(self):
+        pass
+
+class ConvexHull3D(ConvexHullBase):
+
+    def __init__(self, points):
+        super().__init__(points, qhull_options='QJ')
+        self.points = points
+        self._volume = self._volume
+    
+    def calc_sphericity(self):
+        return (np.pi ** (1 / 3)) * ((6 * self._volume) ** (2 / 3)) / self.area
+    
+    def calc_eccentricity(self):
+        pass
 
 
 def load_embeddings(args, dataset_size):
