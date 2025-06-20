@@ -30,7 +30,7 @@ class ConvexHullBase(ConvexHull):
         if self._centroid is None:
             self._centroid = [
                 np.mean(self.points[self.vertices, i])
-                for i in range(self.points.shape[1])
+                for i in range(self._dimension)
             ]
         return self._centroid
 
@@ -42,7 +42,8 @@ class ConvexHullBase(ConvexHull):
         if self._perimeter is None:
             vertices = self.vertices.tolist() + [self.vertices[0]]
             self._perimeter = sum(
-                euclidean(x, y) for x, y in zip(self.points[vertices], self.points[vertices[1:]])
+                euclidean(x, y) 
+                for x, y in zip(self.points[vertices], self.points[vertices[1:]])
             )
         return self._perimeter
 
@@ -57,24 +58,9 @@ class ConvexHullBase(ConvexHull):
         return self._diameter
     
     def calc_compactness(self):
-        if self.points.shape[1] == 2:
-            # compactness for 2D shape
-            compactness = ( 4 * np.pi ) / self._perimeter ** 2
-        elif self.points.shape[1] == 3:
-            # compacness for 3D shape
-            compactness = self._volume ** 2 / 
-        else:
-            raise ValueError("Not supported for dimension > 3.")
-        return compactness
-    
-    def calc_elongation(self):
-        self._compute_pca()
-        axis_lengths = np.sqrt(self._pca.explained_variance_)
-        return axis_lengths[0] / axis_lengths[-1] if axis_lengths[-1] > 0 else float('inf')
-    
-    def calc_spatial_distribution(self):
-        distances = np.linalg.norm(self.points - self._centroid, axis=1)
-        return np.mean(distances)
+        radius = self.calc_diameter() / 2
+        vol_n_sphere = (np.pi ** (self._dimension / 2) * radius ** self._dimension) / gamma((self._dimension / 2) + 1)
+        return self._volume / vol_n_sphere if vol_n_sphere > 0 else 0
     
     def _compute_pca(self):
         if self._pca is None:
@@ -89,32 +75,41 @@ class ConvexHullBase(ConvexHull):
             'axis_lengths': axis_lengths,         # e.g., [major, ..., minor]
             'axis_directions': axis_directions    # unit vectors for each axis
         }
+    
+    def calc_elongation(self):
+        self._compute_pca()
+        axis_lengths = np.sqrt(self._pca.explained_variance_)
+        return axis_lengths[0] / axis_lengths[-1] if axis_lengths[-1] > 0 else float('inf')
+    
+    def calc_spatial_distribution(self):
+        distances = np.linalg.norm(self.points - self._centroid, axis=1)
+        return np.mean(distances)
 
-    def calc_isoperimetric_quotient(self):
-        perimeter = self.calc_perimeter()
-        area = self.calc_volume()
-        r_circle = perimeter / (2 * np.pi)
-        area_circle = np.pi * r_circle**2
-        return area / area_circle
+    # def calc_isoperimetric_quotient(self):
+    #     perimeter = self.calc_perimeter()
+    #     area = self.calc_volume()
+    #     r_circle = perimeter / (2 * np.pi)
+    #     area_circle = np.pi * r_circle**2
+    #     return area / area_circle
 
     def calc_minimum_bounding_sphere(self):
         radius = self.calc_diameter() / 2
-        n_sphere_volume = (np.pi ** (self._dimension / 2) * radius ** self._dimension) / gamma((self._dimension / 2) + 1)
-        compactness = self.calc_volume() / n_sphere_volume if n_sphere_volume > 0 else 0
+        vol_n_sphere = (np.pi ** (self._dimension / 2) * radius ** self._dimension) / gamma((self._dimension / 2) + 1)
+        compactness = self.calc_volume() / vol_n_sphere if vol_n_sphere > 0 else 0
         return {
             'sphere_radius': radius,
-            'sphere_volume': n_sphere_volume,
+            'sphere_volume': vol_n_sphere,
             'compactness': compactness
         }
     
     def calc_edge_statistics(self):
         vertices = self.vertices.tolist() + [self.vertices[0]]
-        edge_lengths = [euclidean(x, y) for x, y in zip(self.points[vertices], self.points[vertices[1:]])]
+        edges = [euclidean(x, y) for x, y in zip(self.points[vertices], self.points[vertices[1:]])]
         return {
-            'mean_edge_length': np.mean(edge_lengths),
-            'shortest_edge': min(edge_lengths),
-            'longest_edge': max(edge_lengths),
-            'ratio_lengths': min(edge_lengths) / max(edge_lengths)
+            'mean_edge_length': np.mean(edges),
+            'shortest_edge': min(edges),
+            'longest_edge': max(edges),
+            'ratio_lengths': min(edges) / max(edges)
         }
     
     def calc_point_density(self):
@@ -126,37 +121,68 @@ class ConvexHullBase(ConvexHull):
     def calc_relative_spatial(self):
         return self.calc_diameter() / self.calc_volume()
 
-    def calc_all_feats(self, config):
+    # def calc_all_feats(self, config):
+    #     feats = []
+    #     if config.get('use_centroid', True):
+    #         feats.extend([*self.calc_centroid()])
+    #     if config.get('use_hull_size', True):
+    #         feats.append(self.calc_hull_size())
+    #     if config.get('use_perimeter', True):
+    #         feats.append(self.calc_perimeter())
+    #     if config.get('use_area', True):
+    #         feats.append(self.calc_volume())
+    #     if config.get('use_diameter', True):
+    #         feats.append(self.calc_diameter())
+    #     if config.get('use_iq', True):
+    #         feats.append(self.calc_isoperimetric_quotient())
+    #     if config.get('use_mbs', True):
+    #         mbs = self.calc_minimum_bounding_sphere()
+    #         feats.extend([mbs['sphere_radius'], 
+    #                       mbs['sphere_volume'], 
+    #                       mbs['compactness']])
+    #     if config.get('use_edge_stats', True):
+    #         edge_stats = self.calc_edge_statistics()
+    #         feats.extend([edge_stats['mean_edge_length'], 
+    #                       edge_stats['shortest_edge'],
+    #                       edge_stats['longest_edge'], 
+    #                       edge_stats['ratio_lengths']])
+    #     if config.get('use_point_density', True):
+    #         feats.append(self.calc_point_density())
+    #     if config.get('use_rel_shape', True):
+    #         feats.append(self.calc_relative_shape())
+    #     if config.get('use_rel_spatial', True):
+    #         feats.append(self.calc_relative_spatial())
+    #     return feats
+
+    def compute_all(self, config=None):
+        if config is None:
+            config = {}
+
         feats = []
-        if config.get('use_centroid', True):
-            feats.extend([*self.calc_centroid()])
-        if config.get('use_hull_size', True):
-            feats.append(self.calc_hull_size())
-        if config.get('use_perimeter', True):
-            feats.append(self.calc_perimeter())
-        if config.get('use_area', True):
-            feats.append(self.calc_volume())
-        if config.get('use_diameter', True):
-            feats.append(self.calc_diameter())
-        if config.get('use_iq', True):
-            feats.append(self.calc_isoperimetric_quotient())
-        if config.get('use_mbs', True):
-            mbs = self.calc_minimum_bounding_sphere()
-            feats.extend([mbs['sphere_radius'], 
-                          mbs['sphere_volume'], 
-                          mbs['compactness']])
-        if config.get('use_edge_stats', True):
-            edge_stats = self.calc_edge_statistics()
-            feats.extend([edge_stats['mean_edge_length'], 
-                          edge_stats['shortest_edge'],
-                          edge_stats['longest_edge'], 
-                          edge_stats['ratio_lengths']])
-        if config.get('use_point_density', True):
-            feats.append(self.calc_point_density())
-        if config.get('use_rel_shape', True):
-            feats.append(self.calc_relative_shape())
-        if config.get('use_rel_spatial', True):
-            feats.append(self.calc_relative_spatial())
+        feats.extend(self.calc_centroid())
+        feats.append(self.calc_hull_size())
+        feats.append(self.calc_perimeter())
+        feats.append(self.calc_volume())
+        feats.append(self.calc_diameter())
+        feats.append(self.calc_compactness())
+
+        mbs = self.calc_minimum_bounding_sphere()
+        feats.extend([mbs['sphere_radius'], mbs['sphere_volume'], mbs['compactness']])
+
+        edge_stats = self.calc_edge_statistics()
+        feats.extend(edge_stats.values())
+
+        feats.append(self.calc_point_density())
+        feats.append(self.calc_relative_shape())
+        feats.append(self.calc_relative_spatial())
+
+        try:
+            feats.append(self.calc_elongation())
+            if self._dimension in [2, 3]:
+                feats.append(self.calc_eccentricity())
+        except:
+            feats.append(None)
+
         return feats
 
 
@@ -164,48 +190,43 @@ class ConvexHull2D(ConvexHullBase):
     
     def __init__(self, points):
         super().__init__(points, qhull_options='QJ')
-        self.points = points
         self._area = self._volume
     
     def calc_circularity(self):
         perimeter = self.calc_perimeter()
-        return (4 * np.pi * self._area) / (perimeter ** 2)
+        return (4 * np.pi * self._area) / (perimeter ** 2) if perimeter > 0 else 0
     
     def calc_eccentricity(self):
-        pass
+        axes = self.calc_major_minor_axes()['axis_lengths']
+        a, b = axes[0], axes[1]
+        return np.sqrt(1 - (b ** 2) / (a ** 2)) if a > 0 else 0
+    
+    def compute_all(self, config=None):
+        feats = super().compute_all(config)
+        feats.append(self.calc_circularity())
+        feats.append(self.calc_eccentricity())
+        return feats
 
 class ConvexHull3D(ConvexHullBase):
 
     def __init__(self, points):
         super().__init__(points, qhull_options='QJ')
-        self.points = points
         self._volume = self._volume
     
     def calc_sphericity(self):
-        return (np.pi ** (1 / 3)) * ((6 * self._volume) ** (2 / 3)) / self.area
+        surface_area = self.area
+        return (np.pi ** (1 / 3)) * ((6 * self._volume) ** (2 / 3)) / surface_area if surface_area > 0 else 0
     
     def calc_eccentricity(self):
-        pass
-
-
-def load_embeddings(args, dataset_size):
-    """Loads the train and test embeddings"""
-    with h5py.File(args.node_embeddings, 'r') as f:
-        node_embeddings = {i:np.array(f[f'embedding_{i}']) for i in range(dataset_size)}
-    return node_embeddings
-
-
-def reduce_embedding_dimensionality(embeddings, dims):
-    """Reduces the dimensionality of each node embedding"""
-    return {
-        dim: {i: PCA(n_components=dim).fit_transform(embedding) for i, embedding in embeddings.items()}
-        for dim in dims
-    }
-
-
-def get_min_graph(dataset):
-    """Returns the size of the smaller graph"""
-    return min(data.x.shape[0] for data in dataset)
+        axes = self.calc_major_minor_axes()['axis_lengths']
+        a, b = axes[0], axes[1]
+        return np.sqrt(1 - (b ** 2) / (a ** 2)) if a > 0 else 0
+    
+    def compute_all(self, config=None):
+        feats = super().compute_all(config)
+        feats.append(self.calc_sphericity())
+        feats.append(self.calc_eccentricity())
+        return feats
 
 
 def calc_matrix_distances(args):
