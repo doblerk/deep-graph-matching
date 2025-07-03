@@ -3,9 +3,9 @@ import numpy as np
 from sklearn.decomposition import PCA
 
 
-def load_embeddings(args, dataset_size):
+def load_embeddings(dir, dataset_size):
     """Loads the train and test embeddings"""
-    with h5py.File(args.node_embeddings, 'r') as f:
+    with h5py.File(dir, 'r') as f:
         node_embeddings = {i:np.array(f[f'embedding_{i}']) for i in range(dataset_size)}
     return node_embeddings
 
