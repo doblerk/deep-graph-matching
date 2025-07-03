@@ -69,7 +69,7 @@ def main(config):
     """
     Computes all pairwise distances between every pair of graphs to yield a dissimilarity matrix.
 
-    Config:
+    Args:
         config: command-line arguments.
     """
     # Setup logging
@@ -95,7 +95,6 @@ def main(config):
     dataset_nx = {i:to_networkx(dataset[i], node_attrs='x', to_undirected=True) for i in range(len(dataset))}
 
     # Load the node embeddings
-    output_dir = Path(config['output_dir']) / config['arch']
     with h5py.File(output_dir / 'node_embeddings.h5', 'r') as f:
         node_embeddings = {i:np.array(f[f'embedding_{i}']) for i in range(len(dataset_nx))}
     
