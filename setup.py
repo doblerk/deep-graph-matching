@@ -18,7 +18,8 @@ setup(
         'scikit-learn>=1.0.0',
         'scipy>=1.0.0',
         'h5py>=3.0.0',
-        'ortools>=9.13.0'
+        'ortools>=9.13.0',
+        'matplotlib>=3.0.0'
     ],
     ext_modules=ext_modules,
     cmdclass={"build_ext": build_ext},
