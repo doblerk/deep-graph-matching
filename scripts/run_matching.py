@@ -92,6 +92,11 @@ def main(config):
                         name=config['dataset_name'],
                         use_node_attr=config.get('use_attrs', False),
                         transform=transform)
+    
+    if not hasattr(dataset[0], 'x') or dataset[0].x is None:
+        dataset.transform = Constant(value=1.0)
+        logging.info("Dataset missing node features 'x', applied Constant transform.")
+    
     dataset_nx = {i:to_networkx(dataset[i], node_attrs='x', to_undirected=True) for i in range(len(dataset))}
 
     # Load the node embeddings
