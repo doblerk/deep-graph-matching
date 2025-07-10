@@ -81,11 +81,11 @@ class ConvexHullBase(ConvexHull):
             axis_lengths = np.sqrt(self._pca.explained_variance_)
             axis_directions = self._pca.components_
             sorted_indices = np.argsort(axis_lengths)[::-1]  # descending order
-            axis_lengths = axis_lengths[sorted_indices]
-            axis_directions = axis_directions[sorted_indices]
+            self._axis_lengths = axis_lengths[sorted_indices]
+            self._axis_directions = axis_directions[sorted_indices]
     
     def calc_major_minor_axes(self):
-        self._compute_pca()
+        # self._compute_pca()
         return {
             'axis_lengths': self._axis_lengths,         # e.g., [major, ..., minor]
             'axis_directions': self._axis_directions    # unit vectors for each axis
@@ -152,7 +152,6 @@ class ConvexHullBase(ConvexHull):
             'relative_spatial': self.calc_relative_spatial(),
         }
 
-        feats.update(self.calc_major_minor_axes())
         feats.update(self.calc_minimum_bounding_sphere())
         feats.update(self.calc_edge_statistics())
 
@@ -180,8 +179,8 @@ class ConvexHull2D(ConvexHullBase):
     def calc_shape_compactness(self):
         return self._area / (self._perimeter ** 2) if self._perimeter > 0 else 0
 
-    def compute_all(self, config=None):
-        feats = super().compute_all(config)
+    def compute_all(self):
+        feats = super().compute_all()
         feats.update({
             'circularity': self.calc_circularity(),
             'eccentricity': self.calc_eccentricity(),
@@ -212,8 +211,8 @@ class ConvexHull3D(ConvexHullBase):
     def calc_shape_compactness(self):
         return self._surface_area / self.calc_volume()
     
-    def compute_all(self, config=None):
-        feats = super().compute_all(config)
+    def compute_all(self):
+        feats = super().compute_all()
         feats.update({
             'sphericity': self.calc_sphericity(),
             'asphericity': self.calc_asphericity(),

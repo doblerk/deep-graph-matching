@@ -1,6 +1,6 @@
 import unittest
 import networkx as nx
-from gnnged.calc_edit_cost import EditCost
+from gnnged.edit_cost.calc_edit_cost import EditCost
 
 class TestEditCost(unittest.TestCase):
 
