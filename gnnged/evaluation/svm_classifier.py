@@ -1,70 +1,97 @@
-import os
+import sys
 import json
-import argparse
+import logging
 import numpy as np
-
+from pathlib import Path
 from sklearn.svm import SVC
 from sklearn.metrics import f1_score
 from sklearn.model_selection import cross_val_score, StratifiedKFold
-
 from torch_geometric.datasets import TUDataset
 
 
-def get_args_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--distance_matrix', type=str, help='Path to distance matrix')
-    parser.add_argument('--indices_dir', type=str, help='Path to indices')
-    parser.add_argument('--dataset_dir', type=str, help='Path to dataset directory')
-    parser.add_argument('--dataset_name', type=str, help='Dataset name')
-    parser.add_argument('--average', type=str, default='binary', help='Multiclass target')
-    return parser
+def svm_classifier(config, output_dir):
+    distance_matrix = np.load(output_dir / config["arch"] / f"distances_{config['method']}.npy")
 
-
-def svm_classifier(args):
+    with open(output_dir / 'train_indices.json', 'r') as fp:
+        train_idx = json.load(fp)
     
-    distance_matrix = np.load(args.distance_matrix)
-
-    train_idx = sorted(np.load(os.path.join(args.indices_dir, 'train_indices.npy')))
-    test_idx = sorted(np.load(os.path.join(args.indices_dir, 'test_indices.npy')))
+    with open(output_dir / 'test_indices.json', 'r') as fp:
+        test_idx = json.load(fp)
 
     idx = list(range(distance_matrix.shape[0]))
 
-    # slicing with np.setdiff1d returns sorted idx -> same order as distance matrix
-    train_distance_matrix = distance_matrix[np.setdiff1d(idx, test_idx),:]
-    train_distance_matrix = train_distance_matrix[:, np.setdiff1d(idx, test_idx)]
+    train_distance_matrix = distance_matrix[train_idx,:]
+    train_distance_matrix = train_distance_matrix[:, train_idx]
     np.fill_diagonal(train_distance_matrix, 1000)
 
     test_distance_matrix = distance_matrix[test_idx,:]
     test_distance_matrix = test_distance_matrix[:,train_idx]
 
-    dataset = TUDataset(root=args.dataset_dir, name=args.dataset_name)
-    
+    dataset = TUDataset(root=config['dataset_dir'], name=config['dataset_name'])
     train_labels = list(dataset[train_idx].y.numpy())
     test_labels = list(dataset[test_idx].y.numpy())
 
-    if args.average == 'average':
-        scoring = 'f1'
-    else:
-        scoring = 'f1_micro'
+    scoring = 'f1' if config['average'] == 'binary' else 'f1_micro'
     
-    C = 1.0
-    kernel = 'precomputed'
+    gammas = [0.001, 0.01, 0.1, 1]
+    cs = [0.1, 1, 10, 100]
 
-    svm_test = SVC(C=C, kernel=kernel)
-    svm_test.fit(train_distance_matrix, train_labels)
+    best_score = 0
+    best_params = None
+    best_kernel = None
 
-    predictions = svm_test.predict(test_distance_matrix)
+    kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    
+    for gamma in gammas:
+        # convert train distance matrix to (RBF) kernel matrix
+        K_train = np.exp(-gamma * np.square(train_distance_matrix))
 
-    f1 = f1_score(test_labels, predictions, average=args.average)
+        for c in cs:
+            svm = SVC(C=c, kernel='precomputed')
+            scores = cross_val_score(svm,
+                                     K_train,
+                                     train_labels,
+                                     cv=kf,
+                                     scoring=scoring)
+            mean_score = scores.mean()
+            if mean_score > best_score:
+                best_score = mean_score
+                best_params = {'C': c, 'gamma': gamma}
+                best_kernel = K_train.copy()
 
-    print(f"F1 Score on new data (SVM) {f1}")
+    # convert test distance matrix to (RBF) kernel matrix
+    K_test = np.exp(-best_params['gamma'] * np.square(test_distance_matrix))
+
+    # retrain using best params
+    svm_final = SVC(C=best_params['C'], kernel='precomputed')
+    svm_final.fit(best_kernel, train_labels)
+    predictions = svm_final.predict(K_test)
+    f1 = f1_score(test_labels, predictions, average=config["average"])
+
+    logging.info(f"The optimal C is {best_params['C']} and optimal gamma i {best_params['gamma']} with a mean F1 score of {best_score:.4f}")
+    logging.info(f"F1 score on test set: {f1:.4f}")
 
 
-def main(args):
-    svm_classifier(args)
+def main(config):
+    output_dir = Path(config["output_dir"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    log_file = output_dir / config["arch"] / 'log_classification.txt'
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file, mode='a'),
+            logging.StreamHandler()
+        ]
+    )
+    logging.info(f"Starting SVM classification for method {config['method']}")
+    svm_classifier(config, output_dir)
+    logging.info("SVM classification completed.")
     
 
 if __name__ == '__main__':
-    parser = get_args_parser()
-    args = parser.parse_args()
-    main(args)
+    config_file = sys.argv[1] if len(sys.argv) > 1 else 'params.json'
+    with open(config_file, 'r') as f:
+        config = json.load(f)
+    main(config)

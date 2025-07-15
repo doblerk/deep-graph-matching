@@ -79,63 +79,67 @@ from gnnged.heuristics.hull_utils import ConvexHullBase, ConvexHull2D, ConvexHul
 #             for config, matrix in enumerate(distance_matrices, start=0):
 #                 f.create_dataset(f'config_{config}', data=matrix)
 
+
+def get_convex_hull_class(dim):
+    if dim == 2:
+        return ConvexHull2D
+    elif dim == 3:
+        return ConvexHull3D
+    else:
+        return ConvexHullBase
+    
+
 def calc_matrix_distances(dataset, node_embeddings, output_dir, dims):
     logging.info("Starting distance computation...")
     
     for dim in dims:
-
-        convex_hulls = dict.fromkeys(range(len(dataset)), list())
-
         t0 = time()
+        hull_class = get_convex_hull_class(dim)
 
-        if dim == 2:
-            for graph_idx, _ in convex_hulls.items():
-                convex_hulls[graph_idx] = ConvexHull2D(node_embeddings[dim][graph_idx]).compute_all(config)
-        elif dim == 3:
-            for graph_idx, _ in convex_hulls.items():
-                convex_hulls[graph_idx] = ConvexHull3D(node_embeddings[dim][graph_idx]).compute_all(config)
-        else:
-            for graph_idx, _ in convex_hulls.items():
-                convex_hulls[graph_idx] = ConvexHullBase(node_embeddings[dim][graph_idx]).compute_all(config)
+        logging.info(f"Processing convex hulls for dimension: {dim} using {hull_class.__name__}")
+
+        feature_dim = len(hull_class(node_embeddings[dim][0]).compute_all())
+        convex_hull_matrix = np.zeros((len(dataset), feature_dim), dtype=np.float32)
         
-        convex_hulls_stacked = np.vstack(list(convex_hulls.values()))
-        convex_hulls_stacked_normalized = normalize(convex_hulls_stacked, axis=0, norm='max')
-        matrix_distances = squareform(pdist(convex_hulls_stacked_normalized, metric='euclidean'))
+        for graph_idx in range(len(dataset)):
+            emb = node_embeddings[dim][graph_idx]
+            features = hull_class(emb).compute_all()
+            convex_hull_matrix[graph_idx] = np.array(features, dtype=np.float32)
+
+        normalized = normalize(convex_hull_matrix, axis=0, norm='max')
+        distances = squareform(pdist(convex_hull_matrix, metric='euclidean'))
 
         duration = time() - t0
         logging.info(f"Finished computation in {duration} seconds for dimension {dim}")
 
-        distance_file = output_dir / f'distances_{dim}d.py'
-        np.save(distance_file, matrix_distances)
-        logging.info(f"Saved distance matrix to {distance_file.resolve()}")
+        # distance_file = output_dir / f'distances_{dim}d.py'
+        # np.save(distance_file, distances)
+        # logging.info(f"Saved distance matrix to {distance_file.resolve()}")
+        break
 
 
 def main(config):
     """
-    Computes all pairwise distance between each pair of graph node embeddings to yield a dissimilarity matrix.
-
-    Args:
-        config: commandline arguments (path to dataset directory, dataset name, path to node embeddings, path to output directory)
+    Computes all pairwise distances between convex hull features of node embeddings for graphs.
     """
-    # Setup logging
     output_dir = Path(config['output_dir']) / config['arch']
     output_dir.mkdir(parents=True, exist_ok=True)
+    
     log_file = output_dir / 'log_hull_matching.txt'
-
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[
-            logging.FileHandler(log_file),
+            logging.FileHandler(log_file, mode='a'),
             logging.StreamHandler()
         ]
     )
 
+    logging.info("Loading dataset and node embeddings...")
     dataset = TUDataset(root=config['dataset_dir'], name=config['dataset_name'])
-
-    dims = (2, 3)
     
     node_embeddings = load_embeddings(output_dir / 'node_embeddings.h5', len(dataset))
+    dims = (2, 3)
     reduced_node_embeddings = reduce_embedding_dimensionality(node_embeddings, dims)
 
     calc_matrix_distances(dataset, reduced_node_embeddings, output_dir, dims)
