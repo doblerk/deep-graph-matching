@@ -106,7 +106,7 @@ def calc_matrix_distances(dataset, node_embeddings, output_dir, dims):
         duration = time() - t0
         logging.info(f"Finished computation in {duration} seconds for dimension {dim}")
 
-        distance_file = output_dir / f'distances_{dim}d.py'
+        distance_file = output_dir / f'distances_{dim}d'
         np.save(distance_file, distances)
         logging.info(f"Saved distance matrix to {distance_file.resolve()}")
 
