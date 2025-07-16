@@ -1,19 +1,13 @@
 import sys
 import json
-import h5py
 import logging
 import numpy as np
 from pathlib import Path
 from time import time
-from scipy.special import gamma
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import normalize
 from torch_geometric.datasets import TUDataset
-
-from scipy.stats import skew, kurtosis
-from scipy.spatial import ConvexHull
-from scipy.spatial.distance import euclidean, pdist, squareform
-
+from scipy.spatial.distance import pdist, squareform
 from gnnged.heuristics.data_utils import load_embeddings, reduce_embedding_dimensionality
 from gnnged.heuristics.hull_utils import ConvexHullBase, ConvexHull2D, ConvexHull3D
 
@@ -107,15 +101,14 @@ def calc_matrix_distances(dataset, node_embeddings, output_dir, dims):
             convex_hull_matrix[graph_idx] = np.array(features, dtype=np.float32)
 
         normalized = normalize(convex_hull_matrix, axis=0, norm='max')
-        distances = squareform(pdist(convex_hull_matrix, metric='euclidean'))
+        distances = squareform(pdist(normalized, metric='euclidean'))
 
         duration = time() - t0
         logging.info(f"Finished computation in {duration} seconds for dimension {dim}")
 
-        # distance_file = output_dir / f'distances_{dim}d.py'
-        # np.save(distance_file, distances)
-        # logging.info(f"Saved distance matrix to {distance_file.resolve()}")
-        break
+        distance_file = output_dir / f'distances_{dim}d.py'
+        np.save(distance_file, distances)
+        logging.info(f"Saved distance matrix to {distance_file.resolve()}")
 
 
 def main(config):
