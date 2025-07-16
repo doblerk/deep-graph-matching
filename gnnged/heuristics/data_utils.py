@@ -12,10 +12,20 @@ def load_embeddings(dir, dataset_size):
 
 def reduce_embedding_dimensionality(embeddings, dims):
     """Reduces the dimensionality of each node embedding"""
-    return {
-        dim: {i: PCA(n_components=dim).fit_transform(embedding) for i, embedding in embeddings.items()}
-        for dim in dims
-    }
+    reduced = {}
+    for dim in dims:
+        reduced[dim] = {}
+        for i, embedding in embeddings.items():
+            num_nodes, _ = embedding.shape
+            if num_nodes >= dim:
+                reduced[dim][i] = PCA(n_components=dim).fit_transform(embedding)
+            else:
+                reduced[dim][i] = embedding
+    return reduced
+    # return {
+    #     dim: {i: PCA(n_components=dim).fit_transform(embedding) for i, embedding in embeddings.items()}
+    #     for dim in dims
+    # }
 
 
 def get_min_graph(dataset):

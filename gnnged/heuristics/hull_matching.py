@@ -135,7 +135,7 @@ def main(config):
     dims = (2, 3)
     reduced_node_embeddings = reduce_embedding_dimensionality(node_embeddings, dims)
 
-    calc_matrix_distances(dataset, reduced_node_embeddings, output_dir, dims)
+    # calc_matrix_distances(dataset, reduced_node_embeddings, output_dir, dims)
 
 
 if __name__ == '__main__':
