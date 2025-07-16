@@ -6,148 +6,6 @@ from scipy.spatial import ConvexHull
 from scipy.spatial.distance import euclidean, pdist
 
 
-# class ConvexHullBase(ConvexHull):
-#     def __init__(self, points):
-#         super().__init__(points, qhull_options='QJ')
-#         self._input_points = points
-#         self._dimension = points.shape[1]
-
-#         # Caches
-#         self._volume = None
-#         self._centroid = None
-#         self._diameter = None
-#         self._perimeter = None
-#         self._pca = None
-#         self._vol_n_sphere = None
-#         self._axis_lengths = None
-#         self._axis_directions = None
-    
-#     @property
-#     def vertices_points(self):
-#         return self.points[self.vertices]
-
-#     def calc_centroid(self):
-#         if self._centroid is None:
-#             self._centroid = np.mean(self.vertices_points, axis=0)
-#         return self._centroid
-
-#     def calc_hull_size(self):
-#         return len(self.vertices)
-
-#     def calc_perimeter(self):
-
-#         if self._perimeter is None:
-#             if self._dimension == 2:
-#                 self._perimeter = self.area
-#                 return self._perimeter
-#             else:
-#                 # Note: in dimension > 2, this is a looped sum of vertex distances, not the true surface perimeter
-#                 vertices = self.vertices.tolist() + [self.vertices[0]]
-#                 self._perimeter = sum(
-#                     euclidean(self.points[i], self.points[j]) 
-#                     for i, j in zip(vertices, vertices[1:])
-#                 )
-#                 return self._perimeter
-#         return self._perimeter
-
-#     def calc_volume(self):
-#         if self._volume is None:
-#             self._volume = self.volume
-#         return self._volume
-    
-#     def calc_diameter(self):
-#         if self._diameter is None:
-#             self._diameter = np.max(pdist(self.vertices_points, metric='euclidean'))
-#         return self._diameter
-    
-#     def _calc_vol_n_sphere(self):
-#         radius = self.calc_diameter() / 2
-#         if self._vol_n_sphere is None:
-#             self._vol_n_sphere = (np.pi ** (self._dimension / 2) * radius ** self._dimension) / gamma((self._dimension / 2) + 1)
-#         return self._vol_n_sphere
-    
-#     def calc_compactness(self):
-#         volume = self.calc_volume()
-#         vol_n_sphere = self._calc_vol_n_sphere()
-#         return volume / vol_n_sphere if vol_n_sphere > 0 else 0
-    
-#     def _compute_pca(self):
-#         if self._pca is None:
-#             self._pca = PCA(n_components=self._dimension)
-#             self._pca.fit(self.vertices_points)
-#             axis_lengths = np.sqrt(self._pca.explained_variance_)
-#             axis_directions = self._pca.components_
-#             sorted_indices = np.argsort(axis_lengths)[::-1]  # descending order
-#             self._axis_lengths = axis_lengths[sorted_indices]
-#             self._axis_directions = axis_directions[sorted_indices]
-#             self._pca = -1
-    
-#     def calc_major_minor_axes(self):
-#         self._compute_pca()
-#         return [self._axis_lengths, self._axis_directions]
-    
-#     def calc_spatial_distribution(self):
-#         centroid = self.calc_centroid()
-#         distances = np.linalg.norm(self.points - centroid, axis=1)
-#         return np.mean(distances)
-    
-#     # def calc_isoperimetric_quotient(self):
-#     #     perimeter = self.calc_perimeter()
-#     #     area = self.calc_volume()
-#     #     r_circle = perimeter / (2 * np.pi)
-#     #     area_circle = np.pi * r_circle**2
-#     #     return area / area_circle
-
-#     def calc_minimum_bounding_sphere(self):
-#         radius = self.calc_diameter() / 2
-#         vol_n_sphere = self._calc_vol_n_sphere()
-#         compactness = self.calc_volume() / vol_n_sphere if vol_n_sphere > 0 else 0
-#         return [radius, vol_n_sphere, compactness]
-    
-#     def calc_edge_statistics(self):
-#         vertices = self.vertices.tolist() + [self.vertices[0]]
-#         edges = [
-#             euclidean(self.points[i], self.points[j]) 
-#             for i, j in zip(vertices, vertices[1:])]
-#         shortest = np.min(edges)
-#         longest = np.max(edges)
-#         return [np.mean(edges), shortest, longest, shortest/longest]
-    
-#     def calc_point_density(self):
-#         return self.calc_hull_size() / self.calc_volume()
-
-#     def calc_relative_shape(self):
-#         return self.calc_perimeter() / self.calc_volume()
-
-#     def calc_relative_spatial(self):
-#         return self.calc_diameter() / self.calc_volume()
-
-#     def compute_all(self):
-#         self._compute_pca()
-
-#         feats = list()
-#         feats.extend(self.calc_centroid())
-#         feats.append(self.calc_hull_size())
-#         feats.append(self.calc_perimeter())
-#         feats.append(self.calc_volume())
-#         feats.append(self.calc_diameter())
-#         feats.append(self.calc_compactness())
-#         feats.append(self.calc_spatial_distribution())
-#         feats.append(self.calc_point_density())
-#         feats.append(self.calc_relative_shape())
-#         feats.append(self.calc_relative_spatial())
-#         feats.extend(self.calc_minimum_bounding_sphere())
-#         feats.extend(self.calc_edge_statistics())
-
-#         for i in range(len(feats)):
-#             if isinstance(feats[i], np.ndarray):
-#                 feats[i] = feats[i].tolist()
-#             elif isinstance(feats[i], (np.floating, np.integer)):
-#                 feats[i] = float(feats[i])
-
-#         return feats
-
-
 class ConvexHullBase(ConvexHull):
     def __init__(self, points):
         super().__init__(points, qhull_options='QJ')
@@ -172,11 +30,9 @@ class ConvexHullBase(ConvexHull):
             return self.area
         else:
             # note: in dimension > 2, this is a looped sum of vertex distances, not the true surface perimeter
-            vertices = self.vertices.tolist() + [self.vertices[0]]
-            return sum(
-                euclidean(self.points[i], self.points[j]) 
-                for i, j in zip(vertices, vertices[1:])
-            )
+            edges = self._extract_edges_from_simplices
+            edge_lengths = [euclidean(self.points[i], self.points[j]) for i, j in edges]
+            return sum(edge_lengths)
 
     @cached_property
     def volume(self):
@@ -224,18 +80,30 @@ class ConvexHullBase(ConvexHull):
         distances = np.linalg.norm(self.points - self.centroid, axis=1)
         return np.mean(distances)
     
+    @cached_property
+    def _extract_edges_from_simplices(self):
+        edge_set = set()
+        for simplex in self.simplices:
+            for i in range(len(simplex)):
+                for j in range(i + 1, len(simplex)):
+                    edge = tuple(sorted((simplex[i].tolist(), simplex[j].tolist())))
+                    edge_set.add(edge)
+        return list(edge_set)
+
     def calc_minimum_bounding_sphere(self):
         radius = self.diameter / 2
         return [radius, self.vol_n_sphere, self.compactness]
     
     def calc_edge_statistics(self):
-        vertices = self.vertices.tolist() + [self.vertices[0]]
-        edges = [
-            euclidean(self.points[i], self.points[j]) 
-            for i, j in zip(vertices, vertices[1:])]
-        shortest = np.min(edges)
-        longest = np.max(edges)
-        return [np.mean(edges), shortest, longest, shortest / longest]
+        if self._dimension == 2:
+            vertices = self.vertices.tolist() + [self.vertices[0].tolist()]
+            edges = [(vertices[i], vertices[i + 1]) for i in range(len(vertices) - 1)]
+        else:
+            edges = self._extract_edges_from_simplices
+        edge_lengths = [euclidean(self.points[i], self.points[j]) for i, j in edges]
+        shortest = np.min(edge_lengths)
+        longest = np.max(edge_lengths)
+        return [np.mean(edge_lengths), shortest, longest, shortest / longest]
     
     @cached_property
     def point_density(self):
@@ -267,84 +135,6 @@ class ConvexHullBase(ConvexHull):
         return flat_feats
 
 
-
-# class ConvexHull2D(ConvexHullBase):
-    
-#     def __init__(self, points):
-#         super().__init__(points)
-#         self._perimeter = self.area
-#         self._area = self.volume
-    
-#     def calc_circularity(self):
-#         return (4 * np.pi * self._area) / (self._perimeter ** 2) if self._perimeter > 0 else 0
-    
-#     def calc_eccentricity(self):
-#         self._compute_pca()
-#         a, b = self._axis_lengths[:2]
-#         return np.sqrt(1 - (b ** 2) / (a ** 2)) if a > 0 else 0
-
-#     def calc_elongation(self):
-#         self._compute_pca()
-#         a, b = self._axis_lengths[:2]
-#         return a / b if b > 0 else 0
-    
-#     def calc_shape_compactness(self):
-#         return self._area / (self._perimeter ** 2) if self._perimeter > 0 else 0
-
-#     def compute_all(self):
-#         feats = super().compute_all()
-#         feats.append(self.calc_circularity())
-#         feats.append(self.calc_eccentricity())
-#         feats.append(self.calc_elongation())
-#         feats.append(self.calc_shape_compactness())
-
-#         for i in range(len(feats)):
-#             if isinstance(feats[i], np.ndarray):
-#                 feats[i] = feats[i].tolist()
-#             elif isinstance(feats[i], (np.floating, np.integer)):
-#                 feats[i] = float(feats[i])
-
-#         return feats
-
-
-# class ConvexHull3D(ConvexHullBase):
-
-#     def __init__(self, points):
-#         super().__init__(points)
-#         self._surface_area = self.area
-    
-#     def calc_sphericity(self):
-#         volume = self.calc_volume()
-#         return (np.pi ** (1 / 3)) * ((6 * volume) ** (2 / 3)) / self._surface_area if self._surface_area > 0 else 0
-    
-#     def calc_asphericity(self):
-#         self._compute_pca()
-#         a, c = self._axis_lengths[0], self._axis_lengths[2]
-#         return (a - c) / a if a > 0 else 0
-    
-#     def calc_elongation(self):
-#         self._compute_pca()
-#         a, c = self._axis_lengths[0], self._axis_lengths[2]
-#         return a / c if c > 0 else 0
-    
-#     def calc_shape_compactness(self):
-#         return self._surface_area / self.calc_volume()
-    
-#     def compute_all(self):
-#         feats = super().compute_all()
-#         feats.append(self.calc_sphericity())
-#         feats.append(self.calc_asphericity())
-#         feats.append(self.calc_elongation())
-#         feats.append(self.calc_shape_compactness())
-
-#         for i in range(len(feats)):
-#             if isinstance(feats[i], np.ndarray):
-#                 feats[i] = feats[i].tolist()
-#             elif isinstance(feats[i], (np.floating, np.integer)):
-#                 feats[i] = float(feats[i])
-
-#         return feats
-
 class ConvexHull2D(ConvexHullBase):
     
     def __init__(self, points):
@@ -369,6 +159,47 @@ class ConvexHull2D(ConvexHullBase):
     @cached_property
     def shape_compactness(self):
         return self._area / (self._perimeter ** 2) if self._perimeter > 0 else 0
+    
+    def _safe_normalize(self, v, eps=1e-8):
+        norm = np.linalg.norm(v)
+        return v / norm if norm > eps else np.zeros_like(v)
+    
+    @cached_property
+    def angle_statistics(self):
+        points = self.vertices_points
+        n = len(points)
+
+        if n < 3:
+            return [0.0, 0.0, 0.0]
+        
+        angles = []
+        for i in range(n):
+            p1 = points[i - 1]          # previous vertex
+            p2 = points[i]              # current vertex
+            p3 = points[(i + 1) % n]    # next vertex
+            
+            v1 = p1 - p2
+            v2 = p3 - p2
+            
+            # normalize vectors
+            v1 = self._safe_normalize(v1)
+            v2 = self._safe_normalize(v2)
+
+            # compute angle in radians
+            dot = np.clip(np.dot(v1, v2), -1.0, 1.0)
+            angle = np.arccos(dot)
+            normalized_angle = angle / np.pi
+            
+            angles.append(normalized_angle)
+
+        angles = np.array(angles)
+
+        return [
+            np.mean(angles),
+            np.std(angles),
+            np.min(angles),
+            np.max(angles)
+        ]
 
     def compute_all(self):
         feats = super().compute_all()
@@ -377,6 +208,7 @@ class ConvexHull2D(ConvexHullBase):
             self.eccentricity,
             self.elongation,
             self.shape_compactness,
+            *self.angle_statistics
         ])
 
         flat_feats = [
@@ -399,12 +231,12 @@ class ConvexHull3D(ConvexHullBase):
     
     @cached_property
     def asphericity(self):
-        a, c = self._axis_lengths[0], self._axis_lengths[2]
+        a, c = self.axis_lengths[0], self.axis_lengths[2]
         return (a - c) / a if a > 0 else 0
     
     @cached_property
     def elongation(self):
-        a, c = self._axis_lengths[0], self._axis_lengths[2]
+        a, c = self.axis_lengths[0], self.axis_lengths[2]
         return a / c if c > 0 else 0
     
     @cached_property
