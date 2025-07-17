@@ -8,6 +8,10 @@ from scipy.spatial.distance import euclidean, pdist
 
 class ConvexHullBase(ConvexHull):
     def __init__(self, points):
+        points = np.asarray(points)
+        num_points, num_dims = points.shape
+        if num_points <= num_dims:
+            raise ValueError(f"Too few points ({num_points}) to compute a hull in {num_dims}D (need at least {num_dims + 1})")
         super().__init__(points, qhull_options='QJ')
         self._input_points = points
         self._dimension = points.shape[1]

@@ -1,4 +1,5 @@
 import h5py
+import logging
 import numpy as np
 from sklearn.decomposition import PCA
 
@@ -20,12 +21,9 @@ def reduce_embedding_dimensionality(embeddings, dims):
             if num_nodes >= dim:
                 reduced[dim][i] = PCA(n_components=dim).fit_transform(embedding)
             else:
-                reduced[dim][i] = embedding
+                logging.warning(f"Skipping PCA for dim={dim}, graph={i}.")
+                continue
     return reduced
-    # return {
-    #     dim: {i: PCA(n_components=dim).fit_transform(embedding) for i, embedding in embeddings.items()}
-    #     for dim in dims
-    # }
 
 
 def get_min_graph(dataset):
