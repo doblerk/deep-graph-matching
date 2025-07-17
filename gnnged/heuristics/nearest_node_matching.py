@@ -50,7 +50,10 @@ def get_labels_knn(test_idx, testing_indices, training_indices, dataset, distanc
 
         node_labels = []
         for node_distances in sub_distances:
-            nearest_neighbors = np.argsort(node_distances)[:k]
+            if k == 1:
+                nearest_neighbors = np.argmin(node_distances)
+            else:
+                nearest_neighbors = np.argsort(node_distances)[:k]
             nearest_labels = [dataset[training_indices[neighbor]].y.item() for neighbor in nearest_neighbors]
             node_label = np.argmax(np.bincount(nearest_labels))
             node_labels.append(node_label)
@@ -75,7 +78,10 @@ def get_labels_weighted_knn(test_idx, testing_indices, training_indices, dataset
 
         node_labels = []
         for node_distances in sub_distances:
-            nearest_neighbors = np.argsort(node_distances)[:k]
+            if k == 1:
+                nearest_neighbors = np.argmin(node_distances)
+            else:
+                nearest_neighbors = np.argsort(node_distances)[:k]
             nearest_distances = node_distances[nearest_neighbors]
 
             softmax_weights = np.exp(-nearest_distances) / np.sum(np.exp(-nearest_distances))

@@ -12,12 +12,18 @@ from torch_geometric.datasets import TUDataset
 
 def knn_classifier(config, output_dir, dim):
     distance_matrix = np.load(output_dir / config["arch"] / f"distances_{dim}d.npy")
-    
+
     with open(output_dir / 'train_indices.json', 'r') as fp:
-        train_idx = json.load(fp)
+        train_idx_full = json.load(fp)
     
     with open(output_dir / 'test_indices.json', 'r') as fp:
-        test_idx = json.load(fp)
+        test_idx_full = json.load(fp)
+    
+    with open(output_dir / config["arch"] / f'valid_indices_{dim}d.json', 'r') as fp:
+        valid_idx = json.load(fp)
+    
+    train_idx = [i for i in train_idx_full if i in valid_idx]
+    test_idx = [i for i in test_idx_full if i in valid_idx]
 
     train_distance_matrix = distance_matrix[train_idx,:]
     train_distance_matrix = train_distance_matrix[:, train_idx]
@@ -27,8 +33,9 @@ def knn_classifier(config, output_dir, dim):
     test_distance_matrix = test_distance_matrix[:,train_idx]
 
     dataset = TUDataset(root=config['dataset_dir'], name=config['dataset_name'])
-    train_labels = list(dataset[train_idx].y.numpy())
-    test_labels = list(dataset[test_idx].y.numpy())
+
+    train_labels = [dataset[i].y.item() for i in train_idx]
+    test_labels = [dataset[i].y.item() for i in test_idx]
 
     scoring = 'f1' if config['average'] == 'binary' else 'f1_micro'
 
@@ -40,7 +47,7 @@ def knn_classifier(config, output_dir, dim):
 
     for k in ks:
         knn = KNeighborsClassifier(n_neighbors=k, metric='precomputed')
-        scores = cross_val_score(knn, 
+        scores = cross_val_score(knn,
                                  train_distance_matrix,
                                  train_labels,
                                  cv=kf,
@@ -65,12 +72,16 @@ def svm_classifier(config, output_dir, dim):
     distance_matrix = np.load(output_dir / config["arch"] / f"distances_{dim}d.npy")
 
     with open(output_dir / 'train_indices.json', 'r') as fp:
-        train_idx = json.load(fp)
+        train_idx_full = json.load(fp)
     
     with open(output_dir / 'test_indices.json', 'r') as fp:
-        test_idx = json.load(fp)
-
-    idx = list(range(distance_matrix.shape[0]))
+        test_idx_full = json.load(fp)
+    
+    with open(output_dir / config["arch"] / f'valid_indices_{dim}d.json', 'r') as fp:
+        valid_idx = json.load(fp)
+    
+    train_idx = [i for i in train_idx_full if i in valid_idx]
+    test_idx = [i for i in test_idx_full if i in valid_idx]
 
     train_distance_matrix = distance_matrix[train_idx,:]
     train_distance_matrix = train_distance_matrix[:, train_idx]
@@ -80,8 +91,9 @@ def svm_classifier(config, output_dir, dim):
     test_distance_matrix = test_distance_matrix[:,train_idx]
 
     dataset = TUDataset(root=config['dataset_dir'], name=config['dataset_name'])
-    train_labels = list(dataset[train_idx].y.numpy())
-    test_labels = list(dataset[test_idx].y.numpy())
+
+    train_labels = [dataset[i].y.item() for i in train_idx]
+    test_labels = [dataset[i].y.item() for i in test_idx]
 
     scoring = 'f1' if config['average'] == 'binary' else 'f1_micro'
     

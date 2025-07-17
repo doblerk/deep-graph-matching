@@ -94,11 +94,16 @@ def calc_matrix_distances(dataset, node_embeddings, output_dir, dims):
 
         feature_dim = len(hull_class(node_embeddings[dim][0]).compute_all())
         convex_hull_matrix = np.zeros((len(dataset), feature_dim), dtype=np.float32)
+        valid_indices = []
         
-        for graph_idx in range(len(dataset)):
-            emb = node_embeddings[dim][graph_idx]
-            features = hull_class(emb).compute_all()
-            convex_hull_matrix[graph_idx] = np.array(features, dtype=np.float32)
+        for i, embedding in node_embeddings[dim].items():
+            try:
+                features = hull_class(embedding).compute_all()
+                convex_hull_matrix[i] = np.array(features, dtype=np.float32)
+                valid_indices.append(i)
+            except ValueError as e:
+                logging.warning(f"Skipping graph {i} at dim {dim}: {e}")
+                continue
 
         normalized = normalize(convex_hull_matrix, axis=0, norm='max')
         distances = squareform(pdist(normalized, metric='euclidean'))
@@ -107,8 +112,14 @@ def calc_matrix_distances(dataset, node_embeddings, output_dir, dims):
         logging.info(f"Finished computation in {duration} seconds for dimension {dim}")
 
         distance_file = output_dir / f'distances_{dim}d'
+        index_file = output_dir / f'valid_indices_{dim}d.json'
+
         np.save(distance_file, distances)
+        with open(index_file, 'w') as f:
+            json.dump(valid_indices, f)
+        
         logging.info(f"Saved distance matrix to {distance_file.resolve()}")
+        logging.info(f"Saved valid indices to {index_file.resolve()}")
 
 
 def main(config):
@@ -135,7 +146,7 @@ def main(config):
     dims = (2, 3)
     reduced_node_embeddings = reduce_embedding_dimensionality(node_embeddings, dims)
 
-    # calc_matrix_distances(dataset, reduced_node_embeddings, output_dir, dims)
+    calc_matrix_distances(dataset, reduced_node_embeddings, output_dir, dims)
 
 
 if __name__ == '__main__':
