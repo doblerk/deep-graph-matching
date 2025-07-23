@@ -125,7 +125,7 @@ class ConvexHullBase(ConvexHull):
     
         feats = (
             list(self.centroid) +
-            [self.hull_size, self.perimeter, self.volume, self.diameter, self.compactness,
+            [self.hull_size, self.perimeter, self.volume, self.diameter, #self.compactness,
             self.spatial_distribution, self.point_density, self.relative_shape, self.relative_spatial] +
             list(self.calc_minimum_bounding_sphere()) +
             list(self.calc_edge_statistics())
