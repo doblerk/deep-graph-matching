@@ -83,9 +83,7 @@ def main(args):
         similarity_matrix[i][j] = kernel.transform([G2]).item()
     
     similarity_matrix += similarity_matrix.T
-
-    dissimilarity_matrix = 1.0 - similarity_matrix
-    np.fill_diagonal(dissimilarity_matrix, 0.0)
+    np.fill_diagonal(similarity_matrix, 1.0)
 
     t1 = time()
     computation_time = t1 - t0
@@ -93,7 +91,7 @@ def main(args):
     with open(os.path.join(args.output_dir, f'computation_time_kernels.txt'), 'a') as file:
         file.write(f'Computation time for {args.kernel} kernel: {computation_time}\n')
 
-    np.save(os.path.join(args.output_dir, f'{args.kernel}_distances.npy'), dissimilarity_matrix)
+    np.save(os.path.join(args.output_dir, f'{args.kernel}_similarity.npy'), similarity_matrix)
 
 
 if __name__ == '__main__':

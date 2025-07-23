@@ -39,7 +39,7 @@ class KNNGraphClassifier:
             return self._predict_knn(k)
     
     def _predict_knn(self, k):
-        topk_indices = np.argpartition(self.distances, kth=range(k), axis=1)[:, :k]
+        topk_indices = np.argpartition(self.distances, kth=k, axis=1)[:, :k]
         topk_labels = self.training_labels[topk_indices]
 
         node_preds = np.apply_along_axis(
@@ -51,7 +51,7 @@ class KNNGraphClassifier:
         return self._aggregate_node_predictions(node_preds)
     
     def _predict_weighted_knn(self, k):
-        topk_indices = np.argpartition(self.distances, kth=range(k), axis=1)[:, :k]
+        topk_indices = np.argpartition(self.distances, kth=k, axis=1)[:, :k]
         topk_dists = np.take_along_axis(self.distances, topk_indices, axis=1)
         topk_labels = self.training_labels[topk_indices]
 
@@ -76,6 +76,6 @@ class KNNGraphClassifier:
             graph_pred_map[graph_id] = graph_pred
         return [graph_pred_map[g] for g in self.test_graph_ids]
 
-    def evaluate(self, predicted_labels):
+    def evaluate(self, predicted_labels, average='binary'):
         true_labels = [self.dataset[i].y.item() for i in self.test_graph_ids]
-        return f1_score(true_labels, predicted_labels)
+        return f1_score(true_labels, predicted_labels, average=average)

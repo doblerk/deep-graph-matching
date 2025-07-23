@@ -44,14 +44,14 @@ def main(config):
         t0 = time()
         preds = classifier.predict(k=k, weighted=False)
         duration = time() - t0
-        acc = classifier.evaluate(preds)
+        acc = classifier.evaluate(preds, config["average"])
         logging.info(f"{k}-NN Accuracy (F1): {acc:.4f}, computation time: {duration} seconds")
 
     logging.info("Running weighted 5-NN...")
     t0 = time()
     preds = classifier.predict(k=5, weighted=True)
     duration = time() - t0
-    acc = classifier.evaluate(preds)
+    acc = classifier.evaluate(preds, config["average"])
     logging.info(f"5-WNN Accuracy (F1): {acc:.4f}, computation time: {duration} seconds")
 
 
