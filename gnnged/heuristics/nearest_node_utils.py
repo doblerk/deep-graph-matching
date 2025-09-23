@@ -1,6 +1,6 @@
 import numpy as np
 from itertools import chain, repeat
-from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score, f1_score
 from scipy.special import softmax
 from scipy.spatial.distance import cdist
 
@@ -78,4 +78,6 @@ class KNNGraphClassifier:
 
     def evaluate(self, predicted_labels, average='binary'):
         true_labels = [self.dataset[i].y.item() for i in self.test_graph_ids]
-        return f1_score(true_labels, predicted_labels, average=average)
+        acc = accuracy_score(true_labels, predicted_labels, average=average)
+        f1 = f1_score(true_labels, predicted_labels, average=average)
+        return acc, f1
