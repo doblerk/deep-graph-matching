@@ -3,62 +3,115 @@ import json
 import logging
 import numpy as np
 from pathlib import Path
-from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.model_selection import cross_val_score, StratifiedKFold
+from sklearn.model_selection import cross_val_score, StratifiedKFold, StratifiedShuffleSplit
 from torch_geometric.datasets import TUDataset
 
 
-def knn_classifier(config, output_dir):
+# def knn_classifier(config, output_dir):
+#     distance_matrix = np.load(output_dir / config["arch"] / f"distances_{config['method']}.npy")
+    
+#     with open(output_dir / 'train_indices.json', 'r') as fp:
+#         train_idx = json.load(fp)
+    
+#     with open(output_dir / 'test_indices.json', 'r') as fp:
+#         test_idx = json.load(fp)
+
+#     train_distance_matrix = distance_matrix[train_idx,:]
+#     train_distance_matrix = train_distance_matrix[:, train_idx]
+#     np.fill_diagonal(train_distance_matrix, 1000)
+
+#     test_distance_matrix = distance_matrix[test_idx,:]
+#     test_distance_matrix = test_distance_matrix[:,train_idx]
+
+#     dataset = TUDataset(root=config['dataset_dir'], name=config['dataset_name'])
+#     train_labels = list(dataset[train_idx].y.numpy())
+#     test_labels = list(dataset[test_idx].y.numpy())
+
+#     scoring = 'f1' if config['average'] == 'binary' else 'f1_micro'
+
+#     ks = (3, 5, 7, 9, 11)
+#     best_k = None
+#     best_score = 0
+
+#     kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+
+#     for k in ks:
+#         knn = KNeighborsClassifier(n_neighbors=k, metric='precomputed')
+#         scores = cross_val_score(knn, 
+#                                  train_distance_matrix,
+#                                  train_labels,
+#                                  cv=kf,
+#                                  scoring=scoring)
+#         mean_score = scores.mean()
+#         logging.info(f"K={k}, Cross-validated F1 score: {mean_score:.4f}")
+#         if mean_score > best_score:
+#             best_score = mean_score
+#             best_k = k
+
+#     # retrain using best_k
+#     knn_test = KNeighborsClassifier(n_neighbors=best_k, metric='precomputed')
+#     knn_test.fit(train_distance_matrix, train_labels)
+#     predictions = knn_test.predict(test_distance_matrix)
+#     f1 = f1_score(test_labels, predictions, average=config["average"])
+
+#     logging.info(f"The optimal number of K-nearest neighbors is {best_k} with a mean F1 score of {best_score:.4f}")
+#     logging.info(f"F1 Score on test set with K={best_k}: {f1:.4f}")
+
+
+def knn_classifier(config, output_dir, n_repeat=5, test_size=0.2):
     distance_matrix = np.load(output_dir / config["arch"] / f"distances_{config['method']}.npy")
     
-    with open(output_dir / 'train_indices.json', 'r') as fp:
-        train_idx = json.load(fp)
-    
-    with open(output_dir / 'test_indices.json', 'r') as fp:
-        test_idx = json.load(fp)
-
-    train_distance_matrix = distance_matrix[train_idx,:]
-    train_distance_matrix = train_distance_matrix[:, train_idx]
-    np.fill_diagonal(train_distance_matrix, 1000)
-
-    test_distance_matrix = distance_matrix[test_idx,:]
-    test_distance_matrix = test_distance_matrix[:,train_idx]
-
     dataset = TUDataset(root=config['dataset_dir'], name=config['dataset_name'])
-    train_labels = list(dataset[train_idx].y.numpy())
-    test_labels = list(dataset[test_idx].y.numpy())
-
-    scoring = 'f1' if config['average'] == 'binary' else 'f1_micro'
-
+    labels = dataset._data.y.numpy()
+    num_classes = dataset.num_classes
+    
+    average = 'binary' if num_classes == 2 else 'micro'
     ks = (3, 5, 7, 9, 11)
-    best_k = None
-    best_score = 0
+    
+    all_test_acc = []
+    all_test_f1 = []
 
-    kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    splitter = StratifiedShuffleSplit(n_splits=n_repeat, test_size=test_size)
 
-    for k in ks:
-        knn = KNeighborsClassifier(n_neighbors=k, metric='precomputed')
-        scores = cross_val_score(knn, 
-                                 train_distance_matrix,
-                                 train_labels,
-                                 cv=kf,
-                                 scoring=scoring)
-        mean_score = scores.mean()
-        logging.info(f"K={k}, Cross-validated F1 score: {mean_score:.4f}")
-        if mean_score > best_score:
-            best_score = mean_score
-            best_k = k
+    # for split_id, (train_idx, test_idx) in enumerate(splitter.split(np.zeros(len(labels)), labels)):
+    #     train_distance_matrix = distance_matrix[np.ix_(train_idx, train_idx)]
+    #     np.fill_diagonal(train_distance_matrix, 1000)
 
-    # retrain using best_k
-    knn_test = KNeighborsClassifier(n_neighbors=best_k, metric='precomputed')
-    knn_test.fit(train_distance_matrix, train_labels)
-    predictions = knn_test.predict(test_distance_matrix)
-    f1 = f1_score(test_labels, predictions, average=config["average"])
+    #     test_distance_matrix = distance_matrix[np.ix_(test_idx, train_idx)]
 
-    logging.info(f"The optimal number of K-nearest neighbors is {best_k} with a mean F1 score of {best_score:.4f}")
-    logging.info(f"F1 Score on test set with K={best_k}: {f1:.4f}")
+    #     train_labels = labels[train_idx]
+    #     test_labels = labels[test_idx]
 
+    #     kf = StratifiedKFold(n_splits=5, shuffle=True)
+    #     best_k = None
+    #     best_score = 0
+        
+    #     for k in ks:
+    #         knn = KNeighborsClassifier(n_neighbors=k, metric='precomputed')
+    #         scores = cross_val_score(knn,
+    #                                  train_distance_matrix,
+    #                                  train_labels,
+    #                                  cv=kf)
+    #         if scores.mean() > best_score:
+    #             best_score, best_k = scores.mean(), k
+        
+    #     knn_test = KNeighborsClassifier(n_neighbors=best_k, metric='precomputed')
+    #     knn_test.fit(train_distance_matrix, train_labels)
+    #     preds = knn_test.predict(test_distance_matrix)
+
+    #     acc = accuracy_score(test_labels, preds)
+    #     f1 = f1_score(test_labels, preds, average=average)
+
+    #     all_test_acc.append(acc)
+    #     all_test_f1.append(f1)
+
+    #     logging.info(f"[Run {split_id+1}] best_k={best_k}, CV={best_score:.4f}, Test Acc={acc:.4f}, Test F1={f1:.4f}")
+    
+    # logging.info(f"Final results over {n_repeat} random splits:")
+    # logging.info(f"Acc mean +/- std: {np.mean(all_test_acc):.4f} +/- {np.std(all_test_acc):.4f}")
+    # logging.info(f"F1 mean +/- std: {np.mean(all_test_f1):.4f} +/- {np.std(all_test_f1):.4f}")
 
 
 def main(config):
