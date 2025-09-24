@@ -68,17 +68,16 @@ def knn_classifier_split(config, output_dir, dim):
     logging.info(f"F1 Score on test set with K={best_k}: {f1:.4f}")
 
 
-def knn_classifier(config, output_dir, n_repeat=5, test_size=0.2):
-    distance_matrix = np.load(output_dir / config["arch"] / f"distances_{config['method']}.npy")
+def knn_classifier(config, output_dir, dim, n_repeat=5, test_size=0.2):
+    distance_matrix = np.load(output_dir / config["arch"] / f"distances_{dim}d.npy")
     
     with open(output_dir / config["arch"] / f'valid_indices_{dim}d.json', 'r') as fp:
         valid_idx = json.load(fp)
     
     dataset = TUDataset(root=config['dataset_dir'], name=config['dataset_name'])
-    dataset_valid = np.array([dataset[i] for i in valid_idx])
-    labels = np.array([dataset_valid[i]._data.y.numpy() for i in valid_idx])
+    labels = np.array([dataset[i].y.item() for i in valid_idx])
     num_classes = dataset.num_classes
-    
+
     average = 'binary' if num_classes == 2 else 'micro'
     ks = (3, 5, 7, 9, 11)
 
@@ -194,15 +193,14 @@ def svm_classifier_split(config, output_dir, dim):
     logging.info(f"F1 score on test set: {f1:.4f}")
 
 
-def svm_classifier(config, output_dir, dim):
+def svm_classifier(config, output_dir, dim, n_repeat=5, test_size=0.2):
     distance_matrix = np.load(output_dir / config["arch"] / f"distances_{dim}d.npy")
     
     with open(output_dir / config["arch"] / f'valid_indices_{dim}d.json', 'r') as fp:
         valid_idx = json.load(fp)
     
     dataset = TUDataset(root=config['dataset_dir'], name=config['dataset_name'])
-    dataset_valid = np.array([dataset[i] for i in valid_idx])
-    labels = np.array([dataset_valid[i].data.y.numpy() for i in valid_idx])
+    labels = np.array([dataset[i].y.item() for i in valid_idx])
     num_classes = np.max(labels) + 1
     
     average = 'binary' if num_classes == 2 else 'micro'
@@ -277,15 +275,15 @@ def main(config):
         ]
     )
 
-    logging.info(f"Starting k-NN classification for dimension 2")
-    knn_classifier(config, output_dir, 2)
+    # logging.info(f"Starting k-NN classification for dimension 2")
+    # knn_classifier(config, output_dir, 2)
     logging.info(f"Starting k-NN classification for dimension 3")
     knn_classifier(config, output_dir, 3)
     logging.info("k-NN classification completed.")
 
-    logging.info(f"Starting SVM classification for method dimension 2")
-    svm_classifier(config, output_dir, 2)
-    logging.info(f"Starting SVM classification for method dimension 3")
+    # logging.info(f"Starting SVM classification for method dimension 2")
+    # svm_classifier(config, output_dir, 2)
+    # logging.info(f"Starting SVM classification for method dimension 3")
     svm_classifier(config, output_dir, 3)
     logging.info("SVM classification completed.")
  

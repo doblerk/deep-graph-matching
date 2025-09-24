@@ -92,7 +92,6 @@ def main(config):
 	    
         logging.info(f"[Run {split_id+1}]")
 
-
         for k in [1, 5]:
             t0 = time()
             preds = classifier.predict(k=k, weighted=False)
