@@ -1,6 +1,7 @@
 import numpy as np
 from itertools import chain, repeat
 from sklearn.metrics import accuracy_score, f1_score
+from sklearn.preprocessing import StandardScaler
 from scipy.special import softmax
 from scipy.spatial.distance import cdist
 
@@ -12,9 +13,14 @@ class KNNGraphClassifier:
         self.test_idx = test_idx
         self.node_embeddings = node_embeddings
 
-        # Flatten node embeddings
-        self.training_embeddings = np.vstack([node_embeddings[i] for i in train_idx])
-        self.testing_embeddings = np.vstack([node_embeddings[i] for i in test_idx])
+        # Normalize and flatten node embeddings
+        scaler = StandardScaler()
+        self.training_embeddings = scaler.fit_transform(
+            np.vstack([node_embeddings[i] for i in train_idx])
+        )
+        self.testing_embeddings = scaler.transform(
+            np.vstack([node_embeddings[i] for i in test_idx])
+        )
 
         # Graph-level labels repeated per node
         self.training_labels = np.repeat(
@@ -78,6 +84,6 @@ class KNNGraphClassifier:
 
     def evaluate(self, predicted_labels, average='binary'):
         true_labels = [self.dataset[i].y.item() for i in self.test_graph_ids]
-        acc = accuracy_score(true_labels, predicted_labels, average=average)
+        acc = accuracy_score(true_labels, predicted_labels)
         f1 = f1_score(true_labels, predicted_labels, average=average)
         return acc, f1
