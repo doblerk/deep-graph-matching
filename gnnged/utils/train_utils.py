@@ -35,7 +35,7 @@ def get_best_trial_params(log_path):
 
 
 @torch.no_grad()
-def extract_embeddings(dataset, device, model, config):
+def extract_embeddings(dataset, device, model, config, hidden_dim):
     '''Extracts the node embeddings of the final layer and stores them in HDF'''
     data_loader = DataLoader(dataset, batch_size=1, shuffle=False)
     embeddings = list()
@@ -45,7 +45,7 @@ def extract_embeddings(dataset, device, model, config):
         h, _ = model(data.x, data.edge_index, data.batch)
         embeddings.append(h.detach().cpu().numpy())
     
-    output_file = Path(config['output_dir']) / config['arch'] / 'node_embeddings.h5'
+    output_file = Path(config['output_dir']) / config['arch'] / f'node_embeddings_dim_{hidden_dim}.h5'
     with h5py.File(output_file, 'w') as f:
         for i, mbddg in enumerate(embeddings, start=0):
             f.create_dataset(f'embedding_{i}', data=mbddg)

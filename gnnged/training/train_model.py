@@ -51,16 +51,16 @@ def test(test_loader, device, model, criterion):
     return acc, loss
 
 
-def train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, config, output_dir):
+def train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, config, output_dir, hidden_dim):
     '''Trains the model, reports accuracy and loss, saves checkpoint, and logs stats'''
 
     t0 = time()
 
     for epoch in range(1):
         train(train_loader, device, optimizer, model, criterion)
-        scheduler.step()
+        # scheduler.step()
 
-        if epoch % 10 == 0:
+        if epoch % 1 == 0:
             train_accuracy, train_loss = test(train_loader, device, model, criterion)
             test_accuracy, test_loss = test(test_loader, device, model, criterion)
             
@@ -77,7 +77,7 @@ def train_model(train_loader, test_loader, device, optimizer, model, criterion, 
     logging.info(f'Training completed in {duration} seconds')
 
     # Save the model checkpoint
-    checkpoint_path = output_dir / 'checkpoint.pth'
+    checkpoint_path = output_dir / f'checkpoint_dim_{hidden_dim}.pth'
     save_dict = {
         'model_state_dict': model.state_dict(),
         'optimizer': optimizer.state_dict(),
@@ -101,12 +101,15 @@ def main(config):
         ]
     )
 
+    hidden_dim = 32
+    logging.info(f"Starting training for dim {hidden_dim}.")
+
     best_params_file = output_dir / 'best_params.json'
     with open(best_params_file, 'r') as f:
         params = json.load(f)
 
     # Log params as JSON string
-    logging.info("Best trial params: %s", json.dumps(params))
+    # logging.info("Best trial params: %s", json.dumps(params))
     
     # Set device to CUDA
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -153,24 +156,24 @@ def main(config):
     model_module = importlib.import_module(f"gnnged.models.{config['arch']}")
     model = model_module.Model(
             input_dim=dataset.num_features,
-            hidden_dim=params['hidden_dim'],
+            hidden_dim=hidden_dim,
             n_classes=dataset.num_classes,
-            n_layers=params['num_layers'],
+            n_layers=3,
     ).to(device)
     logging.info(f'Model initialized: {config["arch"]}')
 
     # Setup optimizer, criterion, scheduler
-    optimizer = torch.optim.Adam(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
     criterion = torch.nn.CrossEntropyLoss()
-    scheduler = StepLR(optimizer, step_size=params['step_size'], gamma=params['gamma'])
+    scheduler = None #StepLR(optimizer, step_size=params['step_size'], gamma=params['gamma'])
     logging.info('Optimizer, criterion, and scheduler initialized.')
 
     # Train the model
-    train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, config, output_dir)
+    train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, config, output_dir, hidden_dim)
     logging.info('Training completed.')
     
     # Extract the embeddings
-    extract_embeddings(dataset, device, model, config)
+    extract_embeddings(dataset, device, model, config, hidden_dim)
     logging.info('Embeddings extraction completed.')
 
 
