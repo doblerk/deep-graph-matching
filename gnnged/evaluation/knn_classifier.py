@@ -60,6 +60,65 @@ from torch_geometric.datasets import TUDataset
 #     logging.info(f"F1 Score on test set with K={best_k}: {f1:.4f}")
 
 
+def knn_classifier_sensitivity_analysis(
+    config,
+    output_dir,
+    n_repeat=5,
+    test_size=0.2
+):
+    """
+    We analyze the sensitivity of the k-NN classifier to the number of neighbors k 
+    by evaluating test-set performance for different fixed values of k. Results are 
+    averaged over multiple random stratified train/test splits. No test data is used for model selection.
+    """
+    distance_matrix = np.load(output_dir / config["arch"] / f"distances_{config['method']}.npy")
+    
+    dataset = TUDataset(root=config['dataset_dir'], name=config['dataset_name'])
+    labels = dataset._data.y.numpy()
+    num_classes = dataset.num_classes
+    
+    average = 'binary' if num_classes == 2 else 'micro'
+    ks = (3, 5, 7, 9, 11)
+
+    # Store results per k
+    results = {k: [] for k in ks}
+
+    splitter = StratifiedShuffleSplit(n_splits=n_repeat, test_size=test_size, random_state=42)
+
+    for split_id, (train_idx, test_idx) in enumerate(splitter.split(np.zeros(len(labels)), labels)):
+        # Distance submatrices
+        train_distance_matrix = distance_matrix[np.ix_(train_idx, train_idx)]
+        np.fill_diagonal(train_distance_matrix, 1000)
+
+        test_distance_matrix = distance_matrix[np.ix_(test_idx, train_idx)]
+
+        train_labels = labels[train_idx]
+        test_labels = labels[test_idx]
+
+        for k in ks:
+            knn = KNeighborsClassifier(n_neighbors=k,metric='precomputed')
+            knn.fit(train_distance_matrix, train_labels)
+            preds = knn.predict(test_distance_matrix)
+
+            f1 = f1_score(test_labels, preds, average=average)
+            results[k].append(f1)
+
+            logging.info(
+                f"[Run {split_id+1}] K={k}, Test F1={f1:.4f}"
+            )
+
+    # Aggregate results
+    logging.info("Sensitivity analysis results (mean ± std over splits):")
+    for k in ks:
+        mean_f1 = np.mean(results[k])
+        std_f1 = np.std(results[k])
+        logging.info(
+            f"K={k}: F1 = {mean_f1:.4f} ± {std_f1:.4f}"
+        )
+
+    return results
+
+
 def knn_classifier(config, output_dir, n_repeat=5, test_size=0.2):
     distance_matrix = np.load(output_dir / config["arch"] / f"distances_{config['method']}.npy")
     
@@ -117,8 +176,8 @@ def knn_classifier(config, output_dir, n_repeat=5, test_size=0.2):
 def main(config):
     output_dir = Path(config["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    log_file = output_dir / config["arch"] / 'log_classification.txt'
+
+    log_file = output_dir / config["arch"] / 'log_classification_sensitivity_analysis.txt'
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
@@ -128,7 +187,8 @@ def main(config):
         ]
     )
     logging.info(f"Starting k-NN classification for method {config['method']}")
-    knn_classifier(config, output_dir)
+    # knn_classifier(config, output_dir)
+    knn_classifier_sensitivity_analysis(config, output_dir)
     logging.info("k-NN classification completed.")
  
 

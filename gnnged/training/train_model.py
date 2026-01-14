@@ -51,16 +51,16 @@ def test(test_loader, device, model, criterion):
     return acc, loss
 
 
-def train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, config, output_dir, hidden_dim):
+def train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, config, output_dir, hidden_dim, num_layers):
     '''Trains the model, reports accuracy and loss, saves checkpoint, and logs stats'''
 
     t0 = time()
 
-    for epoch in range(1):
+    for epoch in range(201):
         train(train_loader, device, optimizer, model, criterion)
         # scheduler.step()
 
-        if epoch % 1 == 0:
+        if epoch % 50 == 0:
             train_accuracy, train_loss = test(train_loader, device, model, criterion)
             test_accuracy, test_loss = test(test_loader, device, model, criterion)
             
@@ -77,7 +77,7 @@ def train_model(train_loader, test_loader, device, optimizer, model, criterion, 
     logging.info(f'Training completed in {duration} seconds')
 
     # Save the model checkpoint
-    checkpoint_path = output_dir / f'checkpoint_dim_{hidden_dim}.pth'
+    checkpoint_path = output_dir / f'checkpoint_nlayers_{num_layers}.pth' #f'checkpoint_dim_{hidden_dim}.pth'
     save_dict = {
         'model_state_dict': model.state_dict(),
         'optimizer': optimizer.state_dict(),
@@ -88,7 +88,7 @@ def train_model(train_loader, test_loader, device, optimizer, model, criterion, 
 
 
 def main(config):
-    output_dir = Path(config['output_dir']) / config['arch']
+    output_dir = Path(config['output_dir']) / config['arch'] / 'num_layers' #'emb_dimension'
     output_dir.mkdir(parents=True, exist_ok=True)
     
     log_file = output_dir / 'log_training.txt'
@@ -101,12 +101,13 @@ def main(config):
         ]
     )
 
-    hidden_dim = 32
-    logging.info(f"Starting training for dim {hidden_dim}.")
+    hidden_dim = 64
+    num_layers = 5
+    logging.info(f"Starting training for dim {hidden_dim} and number of layers {num_layers}.")
 
-    best_params_file = output_dir / 'best_params.json'
-    with open(best_params_file, 'r') as f:
-        params = json.load(f)
+    # best_params_file = output_dir / 'best_params.json'
+    # with open(best_params_file, 'r') as f:
+    #     params = json.load(f)
 
     # Log params as JSON string
     # logging.info("Best trial params: %s", json.dumps(params))
@@ -158,7 +159,7 @@ def main(config):
             input_dim=dataset.num_features,
             hidden_dim=hidden_dim,
             n_classes=dataset.num_classes,
-            n_layers=3,
+            n_layers=num_layers,
     ).to(device)
     logging.info(f'Model initialized: {config["arch"]}')
 
@@ -169,11 +170,11 @@ def main(config):
     logging.info('Optimizer, criterion, and scheduler initialized.')
 
     # Train the model
-    train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, config, output_dir, hidden_dim)
+    train_model(train_loader, test_loader, device, optimizer, model, criterion, scheduler, config, output_dir, hidden_dim, num_layers)
     logging.info('Training completed.')
     
     # Extract the embeddings
-    extract_embeddings(dataset, device, model, config, hidden_dim)
+    extract_embeddings(dataset, device, model, config, hidden_dim, num_layers)
     logging.info('Embeddings extraction completed.')
 
 
